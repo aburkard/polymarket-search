@@ -331,6 +331,12 @@ def main():
     else:
         print("  Fetching from Polymarket API...")
         events = fetch_all_events()
+        snapshot_path = Path(__file__).parent.parent / "data" / "events_active.jsonl"
+        snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+        with snapshot_path.open("w") as f:
+            for ev in events:
+                f.write(json.dumps(ev, separators=(",", ":")) + "\n")
+        print(f"  Saved snapshot: {snapshot_path}")
 
     print(f"  Total events: {len(events)}")
 

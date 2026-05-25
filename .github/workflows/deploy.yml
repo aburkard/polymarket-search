@@ -1,0 +1,66 @@
+name: Build and Deploy
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # 1. Fetch fresh data from Polymarket (saves snapshot for enrich.py)
+      - name: Fetch data and build index
+        run: python scripts/build-index.py
+
+      # 2. Enrich new events (if API key is set)
+      - name: Enrich new events
+        if: ${{ secrets.OPENROUTER_API_KEY != '' }}
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: python scripts/enrich.py --limit 100
+
+      # 3. Commit new enrichments back to repo
+      - name: Commit enrichments
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f data/enrichments.jsonl
+          git diff --staged --quiet && echo "No new enrichments" || git commit -m "Update enrichments [skip ci]" && git push
+
+      # 4. Rebuild index with any new enrichments
+      - name: Rebuild index
+        run: python scripts/build-index.py
+
+      # 5. Deploy static site to Pages
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public/
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
