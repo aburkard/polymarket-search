@@ -6,8 +6,8 @@ export const DEFAULT_CONFIG = {
   fuzzyMinLen: 4,
   fuzzyMaxDistFrac: 0.25,
   fuzzyDiscount: 0.3,
-  volWeight24h: 0.6,
-  volWeightTotal: 0.1,
+  volWeight24h: 0.2,
+  volWeightTotal: 0.4,
   coverageExp: 2,
   yearBoostMatch: 3,
   yearBoostMiss: 0.05,
@@ -186,6 +186,7 @@ export function search(query, data, limit = 20, config = DEFAULT_CONFIG) {
   }
 
   results.sort((a, b) => b._score - a._score);
+
 
   const districtMatch = query.match(/\b([a-z]{2})[- ]?(\d{1,2})\b/i);
   if (districtMatch) {
