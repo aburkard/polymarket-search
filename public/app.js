@@ -133,7 +133,7 @@ function renderCard(r) {
         const label = o.l || shortenQuestion(o.q, r.q);
         return `<span class="outcome">${esc(label)} <b>${pct}</b></span>`;
       })
-      .join('<span class="outcome-sep">·</span>');
+      .join("");
   }
 
   const meta = buildMeta(r);
