@@ -397,11 +397,13 @@ resultsEl.addEventListener("mouseleave", (e) => {
   if (pct) { closeTips(); }
 }, true);
 
+let tipClickBlock = false;
+
 resultsEl.addEventListener("pointerdown", (e) => {
   const pct = e.target.closest(".outcome-pct");
   if (pct?.querySelector(".price-tip")) {
-    e.preventDefault();
     e.stopImmediatePropagation();
+    tipClickBlock = true;
     if (pct.classList.contains("tip-open")) {
       closeTips();
     } else {
@@ -409,6 +411,14 @@ resultsEl.addEventListener("pointerdown", (e) => {
     }
   }
 });
+
+resultsEl.addEventListener("click", (e) => {
+  if (tipClickBlock) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    tipClickBlock = false;
+  }
+}, true);
 
 document.addEventListener("pointerdown", (e) => {
   if (!e.target.closest(".outcome-pct")) closeTips();
