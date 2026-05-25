@@ -244,6 +244,14 @@ def build_index(events: list[dict]) -> dict:
             ctx[t].append([doc_idx, ctx_tf.get(t, 1)])
             df[t] = df.get(t, 0) + 1
 
+        all_yes_prices = []
+        for m in active_markets:
+            prices = parse_outcome_prices(m.get("outcomePrices"))
+            if prices:
+                all_yes_prices.append(prices[0])
+        price_sum = sum(all_yes_prices) if all_yes_prices else 1
+        norm_factor = price_sum if len(active_markets) > 1 and price_sum > 0 else 1
+
         total_vol24 = sum(float(m.get("volume24hr") or 0) for m in active_markets)
         total_vol = sum(float(m.get("volume") or 0) for m in active_markets)
 
@@ -271,10 +279,19 @@ def build_index(events: list[dict]) -> dict:
 
         outcomes = []
         for m in top_markets:
+            raw_prices = parse_outcome_prices(m.get("outcomePrices"))
+            if len(active_markets) > 1 and norm_factor > 0 and raw_prices:
+                normed = [round(raw_prices[0] / norm_factor, 4)]
+                if len(raw_prices) > 1:
+                    normed.append(round(1 - normed[0], 4))
+                display_prices = normed
+            else:
+                display_prices = raw_prices
+
             o = {
                 "q": m.get("question", ""),
                 "l": m.get("groupItemTitle", ""),
-                "op": parse_outcome_prices(m.get("outcomePrices")),
+                "op": display_prices,
                 "v": round(float(m.get("volume24hr") or 0)),
             }
             mimg = m.get("image") or m.get("icon") or ""
