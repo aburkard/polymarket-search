@@ -2,6 +2,7 @@ import { prepareIndex, search } from "./search.js";
 
 let data = null;
 let debounceTimer = null;
+let selectedIdx = -1;
 
 const input = document.getElementById("search-input");
 const resultsEl = document.getElementById("results");
@@ -22,8 +23,51 @@ async function init() {
   }
 }
 
+// ── Keyboard ────────────────────────────────────────────────────────
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "/" && document.activeElement !== input) {
+    e.preventDefault();
+    input.focus();
+    input.select();
+  }
+  if (e.key === "Escape") {
+    if (input.value) {
+      input.value = "";
+      handleInput();
+    } else {
+      input.blur();
+    }
+  }
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    const cards = resultsEl.querySelectorAll(".result");
+    if (!cards.length) return;
+    e.preventDefault();
+    cards[selectedIdx]?.removeAttribute("aria-selected");
+    if (e.key === "ArrowDown") {
+      selectedIdx = Math.min(selectedIdx + 1, cards.length - 1);
+    } else {
+      selectedIdx = Math.max(selectedIdx - 1, -1);
+    }
+    if (selectedIdx === -1) {
+      input.focus();
+    } else {
+      cards[selectedIdx]?.setAttribute("aria-selected", "true");
+      cards[selectedIdx]?.scrollIntoView({ block: "nearest" });
+      cards[selectedIdx]?.focus();
+    }
+  }
+  if (e.key === "Enter" && selectedIdx >= 0) {
+    const card = resultsEl.querySelectorAll(".result")[selectedIdx];
+    if (card) window.open(card.href, "_blank");
+  }
+});
+
+// ── Search handling ────────────────────────────────────────────────
+
 function handleInput() {
   clearTimeout(debounceTimer);
+  selectedIdx = -1;
   debounceTimer = setTimeout(() => {
     const query = input.value.trim();
     if (!query || !data) {
@@ -32,7 +76,7 @@ function handleInput() {
     }
     const results = search(query, data, 20);
     renderResults(results);
-  }, 100);
+  }, 80);
 }
 
 function showTrending() {
@@ -41,10 +85,8 @@ function showTrending() {
     .sort((a, b) => b.v - a.v)
     .slice(0, 10);
   resultsEl.innerHTML =
-    '<div class="trending-label">Trending</div>' +
-    trending
-      .map((r) => renderResultCard(r))
-      .join("");
+    '<div class="section-label">Trending</div>' +
+    trending.map((r) => renderCard(r)).join("");
 }
 
 function renderResults(results) {
@@ -52,135 +94,162 @@ function renderResults(results) {
     resultsEl.innerHTML = '<div class="no-results">No markets found</div>';
     return;
   }
-
-  resultsEl.innerHTML = results.map((r) => renderResultCard(r)).join("");
+  resultsEl.innerHTML = results.map((r) => renderCard(r)).join("");
 }
 
-function renderResultCard(r) {
-  const vol = formatVolume(r.v);
-  const endDate = r.ed || "";
-  const url = `https://polymarket.com/event/${r.s}`;
+// ── Card rendering ──────────────────────────────────────────────────
 
-  if (r.tm) return renderSportsResult(r, url, vol);
+function renderCard(r) {
+  const url = `https://polymarket.com/event/${r.s}`;
+  if (r.tm) return renderSportCard(r, url);
 
   const img = r.im
     ? `<img src="${r.im}" alt="" class="result-img" loading="lazy">`
     : '<div class="result-img placeholder"></div>';
 
-  const outcomes = (r.mk || []).slice(0, 4);
-  let outcomesHtml;
+  const outcomes = (r.mk || []).slice(0, 5);
+  let outcomesHtml = "";
 
   if (outcomes.length === 1) {
-    const prices = outcomes[0].op || [];
-    const yes = prices[0] != null ? (prices[0] * 100).toFixed(0) : "–";
-    const no = prices[1] != null ? (prices[1] * 100).toFixed(0) : "–";
-    outcomesHtml = `
-      <span class="price yes">${yes}¢ Yes</span>
-      <span class="price no">${no}¢ No</span>`;
-  } else {
+    const p = outcomes[0].op?.[0];
+    const pct = p != null ? Math.round(p * 100) : null;
+    if (pct != null) {
+      outcomesHtml = `
+        <div class="yes-no">
+          <span class="yes">${pct}% Yes</span>
+          <span class="no">${100 - pct}% No</span>
+        </div>
+        <div class="prob-bar"><div class="prob-bar-fill" style="width:${pct}%"></div></div>`;
+    }
+  } else if (outcomes.length > 1) {
     outcomesHtml = outcomes
       .map((o) => {
         const p = o.op?.[0];
-        const pct = p != null ? (p * 100).toFixed(0) + "¢" : "–";
+        const pct = p != null ? Math.round(p * 100) + "%" : "–";
         const label = o.l || shortenQuestion(o.q, r.q);
-        return `<span class="outcome">${escapeHtml(label)} <b>${pct}</b></span>`;
+        return `<span class="outcome">${esc(label)} <b>${pct}</b></span>`;
       })
       .join("");
   }
 
-  const marketCount = r.mc > outcomes.length
-    ? `<span class="more-markets">+${r.mc - outcomes.length} more</span>`
-    : "";
+  const meta = buildMeta(r);
 
   return `
-  <a href="${url}" target="_blank" rel="noopener" class="result">
+  <a href="${url}" target="_blank" rel="noopener" class="result" role="listitem" tabindex="0">
     ${img}
     <div class="result-body">
-      <div class="result-question">${escapeHtml(r.q)}</div>
-      <div class="result-outcomes">${outcomesHtml}</div>
-      <div class="result-meta">
-        <span class="vol">$${vol} vol</span>
-        ${endDate ? `<span class="end-date">${endDate}</span>` : ""}
-        ${marketCount}
-      </div>
+      <div class="result-question">${esc(r.q)}</div>
+      ${outcomesHtml ? `<div class="result-outcomes">${outcomesHtml}</div>` : ""}
+      <div class="result-meta">${meta}</div>
     </div>
   </a>`;
 }
 
-function renderSportsResult(r, url, vol) {
+function renderSportCard(r, url) {
   const away = r.tm[0] || {};
   const home = r.tm[1] || {};
 
   const moneyline = (r.mk || []).find((m) => {
     const q = m.q.toLowerCase();
-    return !q.includes("spread") && !q.includes("o/u") && !q.includes(":") && !q.includes("odd/even") && !q.includes("team to");
+    return (
+      !q.includes("spread") &&
+      !q.includes("o/u") &&
+      !q.includes(":") &&
+      !q.includes("odd/even") &&
+      !q.includes("team to")
+    );
   });
-  const awayOdds = moneyline?.op?.[0];
-  const homeOdds = moneyline?.op?.[1];
+  const awayPct = moneyline?.op?.[0] != null ? Math.round(moneyline.op[0] * 100) : null;
+  const homePct = moneyline?.op?.[1] != null ? Math.round(moneyline.op[1] * 100) : null;
 
   const props = (r.mk || [])
     .filter((m) => m !== moneyline)
     .map((m) => {
       const p = m.op?.[0];
-      const pct = p != null ? (p * 100).toFixed(0) + "¢" : "–";
-      const label = m.l || m.q.replace(r.q + ": ", "").replace(r.q.split(" vs. ").reverse().join(" vs. ") + ": ", "");
-      return `<span class="outcome">${escapeHtml(label)} <b>${pct}</b></span>`;
+      const pct = p != null ? Math.round(p * 100) + "%" : "–";
+      const label =
+        m.l ||
+        m.q
+          .replace(r.q + ": ", "")
+          .replace(
+            r.q.split(" vs. ").reverse().join(" vs. ") + ": ",
+            "",
+          );
+      return `<span class="outcome">${esc(label)} <b>${pct}</b></span>`;
     });
 
   const liveHtml = r.live
-    ? `<span class="live-badge">LIVE ${escapeHtml(r.per || "")}</span><span class="score">${escapeHtml(r.sc || "")}</span>`
+    ? `<span class="live-badge">Live ${esc(r.per || "")}</span><span class="score">${esc(r.sc || "")}</span>`
     : "";
 
-  const dateStr = r.gd || r.ed || "";
+  const meta = [];
+  if (liveHtml) meta.push(liveHtml);
+  meta.push(`<span>${formatVol(r.v)} vol</span>`);
+  if (r.gd || r.ed) meta.push(`<span>${r.gd || r.ed}</span>`);
+  if (r.mc > (r.mk || []).length)
+    meta.push(`<span>+${r.mc - (r.mk || []).length} more</span>`);
 
   return `
-    <a href="${url}" target="_blank" rel="noopener" class="result result-sport">
-      <div class="sport-matchup">
-        <div class="sport-team">
-          ${away.l ? `<img src="${away.l}" alt="" class="team-logo">` : ""}
-          <span class="team-name">${escapeHtml(away.n)}</span>
-          <span class="team-record">${escapeHtml(away.r)}</span>
-          ${awayOdds != null ? `<span class="team-odds">${(awayOdds * 100).toFixed(0)}¢</span>` : ""}
-        </div>
-        <div class="sport-team">
-          ${home.l ? `<img src="${home.l}" alt="" class="team-logo">` : ""}
-          <span class="team-name">${escapeHtml(home.n)}</span>
-          <span class="team-record">${escapeHtml(home.r)}</span>
-          ${homeOdds != null ? `<span class="team-odds">${(homeOdds * 100).toFixed(0)}¢</span>` : ""}
-        </div>
+  <a href="${url}" target="_blank" rel="noopener" class="result result-sport" role="listitem" tabindex="0">
+    <div class="sport-matchup">
+      <div class="sport-team">
+        ${away.l ? `<img src="${away.l}" alt="" class="team-logo">` : ""}
+        <span class="team-name">${esc(away.n)}</span>
+        <span class="team-record">${esc(away.r)}</span>
+        ${awayPct != null ? `<span class="team-odds">${awayPct}%</span>` : ""}
       </div>
-      ${props.length ? `<div class="result-outcomes">${props.join("")}</div>` : ""}
-      <div class="result-meta">
-        ${liveHtml}
-        <span class="vol">$${vol} vol</span>
-        ${dateStr ? `<span class="end-date">${dateStr}</span>` : ""}
-        ${r.mc > (r.mk || []).length ? `<span class="more-markets">+${r.mc - (r.mk || []).length} more props</span>` : ""}
+      <div class="sport-team">
+        ${home.l ? `<img src="${home.l}" alt="" class="team-logo">` : ""}
+        <span class="team-name">${esc(home.n)}</span>
+        <span class="team-record">${esc(home.r)}</span>
+        ${homePct != null ? `<span class="team-odds">${homePct}%</span>` : ""}
       </div>
-    </a>`;
+    </div>
+    ${props.length ? `<div class="result-outcomes">${props.join("")}</div>` : ""}
+    <div class="result-meta">${meta.join('<span class="meta-sep"></span>')}</div>
+  </a>`;
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────
+
+function buildMeta(r) {
+  const parts = [];
+  parts.push(`<span>${formatVol(r.v)} vol</span>`);
+  if (r.ed) parts.push(`<span>${r.ed}</span>`);
+  if (r.mc > (r.mk || []).slice(0, 5).length)
+    parts.push(`<span>+${r.mc - Math.min((r.mk || []).length, 5)} more</span>`);
+  return parts.join('<span class="meta-sep"></span>');
 }
 
 function shortenQuestion(marketQ, eventTitle) {
-  let label = marketQ
-    .replace(/^Will\s+/i, "")
-    .replace(/\?$/, "");
+  let label = marketQ.replace(/^Will\s+/i, "").replace(/\?$/, "");
   const titleWords = eventTitle.toLowerCase().split(/\s+/);
   for (const w of titleWords) {
     if (w.length > 3) {
-      label = label.replace(new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), "").trim();
+      label = label
+        .replace(
+          new RegExp(
+            w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+            "gi",
+          ),
+          "",
+        )
+        .trim();
     }
   }
   label = label.replace(/\s{2,}/g, " ").replace(/^[\s,]+|[\s,]+$/g, "");
-  if (label.length > 40) label = label.slice(0, 37) + "…";
-  return label || marketQ.slice(0, 40);
+  if (label.length > 35) label = label.slice(0, 32) + "…";
+  return label || marketQ.slice(0, 35);
 }
 
-function formatVolume(v) {
-  if (v >= 1_000_000) return (v / 1_000_000).toFixed(1) + "M";
-  if (v >= 1_000) return (v / 1_000).toFixed(0) + "K";
-  return String(v);
+function formatVol(v) {
+  if (v >= 1_000_000) return "$" + (v / 1_000_000).toFixed(1) + "M";
+  if (v >= 1_000) return "$" + (v / 1_000).toFixed(0) + "K";
+  if (v > 0) return "$" + v;
+  return "$0";
 }
 
-function escapeHtml(s) {
+function esc(s) {
   const el = document.createElement("span");
   el.textContent = s;
   return el.innerHTML;
