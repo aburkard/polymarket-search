@@ -366,6 +366,31 @@ h1 {
   padding: 48px 0; font-size: 0.875rem;
 }
 
+.outcome-pct {
+  position: relative;
+}
+
+.price-tip {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: 4px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.outcome-pct.tip-open .price-tip {
+  display: block;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0s !important; }
 }

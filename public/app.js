@@ -135,7 +135,7 @@ function renderCard(r) {
       rowsHtml = `
         <div class="outcome-row ${yesLeads ? "" : "is-dim"}">
           <span class="outcome-label">Yes</span>
-          <span class="outcome-pct">${pct}%</span>
+          <span class="outcome-pct">${pct}%${priceTipHtml(outcomes[0])}</span>
         </div>
         <div class="outcome-row ${yesLeads ? "is-dim is-no" : "is-no"}">
           <span class="outcome-label">No</span>
@@ -162,7 +162,7 @@ function renderCard(r) {
         return `
         <div class="outcome-row${cls}">
           ${oImg}<span class="outcome-label">${esc(label)}</span>
-          <span class="outcome-pct">${pct}</span>
+          <span class="outcome-pct">${pct}${priceTipHtml(o)}</span>
         </div>`;
       })
       .join("");
@@ -276,6 +276,15 @@ function renderSportCard(r, url) {
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
+function priceTipHtml(o) {
+  const parts = [];
+  if (o.bid != null) parts.push(`Bid ${Math.round(o.bid * 100)}¢`);
+  if (o.ask != null) parts.push(`Ask ${Math.round(o.ask * 100)}¢`);
+  if (o.last != null) parts.push(`Last ${Math.round(o.last * 100)}¢`);
+  if (!parts.length) return "";
+  return `<span class="price-tip">${parts.join(" · ")}</span>`;
+}
+
 function buildMeta(r) {
   const parts = [];
   parts.push(`<span>${formatVol(r.vt || r.v)} vol</span>`);
@@ -363,6 +372,26 @@ document.getElementById("site-title").addEventListener("click", () => {
   input.value = "";
   handleInput();
   input.focus();
+});
+
+resultsEl.addEventListener("pointerenter", (e) => {
+  const pct = e.target.closest(".outcome-pct");
+  if (pct?.querySelector(".price-tip")) pct.classList.add("tip-open");
+}, true);
+
+resultsEl.addEventListener("pointerleave", (e) => {
+  const pct = e.target.closest(".outcome-pct");
+  if (pct) pct.classList.remove("tip-open");
+}, true);
+
+resultsEl.addEventListener("click", (e) => {
+  const pct = e.target.closest(".outcome-pct");
+  if (pct?.querySelector(".price-tip")) {
+    e.preventDefault();
+    e.stopPropagation();
+    document.querySelectorAll(".tip-open").forEach((el) => el.classList.remove("tip-open"));
+    pct.classList.toggle("tip-open");
+  }
 });
 
 input.addEventListener("input", handleInput);
