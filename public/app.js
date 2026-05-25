@@ -16,6 +16,7 @@ async function init() {
     statusEl.textContent = `${data.n.toLocaleString()} markets loaded`;
     input.disabled = false;
     input.focus();
+    showTrending();
   } catch (e) {
     statusEl.textContent = `Failed to load: ${e.message}`;
   }
@@ -26,12 +27,24 @@ function handleInput() {
   debounceTimer = setTimeout(() => {
     const query = input.value.trim();
     if (!query || !data) {
-      resultsEl.innerHTML = "";
+      showTrending();
       return;
     }
     const results = search(query, data, 20);
     renderResults(results);
   }, 100);
+}
+
+function showTrending() {
+  if (!data) return;
+  const trending = [...data.docs]
+    .sort((a, b) => b.v - a.v)
+    .slice(0, 10);
+  resultsEl.innerHTML =
+    '<div class="trending-label">Trending</div>' +
+    trending
+      .map((r) => renderResultCard(r))
+      .join("");
 }
 
 function renderResults(results) {
@@ -40,58 +53,58 @@ function renderResults(results) {
     return;
   }
 
-  resultsEl.innerHTML = results
-    .map((r) => {
-      const vol = formatVolume(r.v);
-      const endDate = r.ed || "";
-      const url = `https://polymarket.com/event/${r.s}`;
+  resultsEl.innerHTML = results.map((r) => renderResultCard(r)).join("");
+}
 
-      if (r.tm) return renderSportsResult(r, url, vol);
+function renderResultCard(r) {
+  const vol = formatVolume(r.v);
+  const endDate = r.ed || "";
+  const url = `https://polymarket.com/event/${r.s}`;
 
-      const img = r.im
-        ? `<img src="${r.im}" alt="" class="result-img" loading="lazy">`
-        : '<div class="result-img placeholder"></div>';
+  if (r.tm) return renderSportsResult(r, url, vol);
 
-      const outcomes = (r.mk || []).slice(0, 4);
-      let outcomesHtml;
+  const img = r.im
+    ? `<img src="${r.im}" alt="" class="result-img" loading="lazy">`
+    : '<div class="result-img placeholder"></div>';
 
-      if (outcomes.length === 1) {
-        const prices = outcomes[0].op || [];
-        const yes = prices[0] != null ? (prices[0] * 100).toFixed(0) : "–";
-        const no = prices[1] != null ? (prices[1] * 100).toFixed(0) : "–";
-        outcomesHtml = `
-          <span class="price yes">${yes}¢ Yes</span>
-          <span class="price no">${no}¢ No</span>`;
-      } else {
-        outcomesHtml = outcomes
-          .map((o) => {
-            const p = o.op?.[0];
-            const pct = p != null ? (p * 100).toFixed(0) + "¢" : "–";
-            const label = o.l || shortenQuestion(o.q, r.q);
-            return `<span class="outcome">${escapeHtml(label)} <b>${pct}</b></span>`;
-          })
-          .join("");
-      }
+  const outcomes = (r.mk || []).slice(0, 4);
+  let outcomesHtml;
 
-      const marketCount = r.mc > outcomes.length
-        ? `<span class="more-markets">+${r.mc - outcomes.length} more</span>`
-        : "";
+  if (outcomes.length === 1) {
+    const prices = outcomes[0].op || [];
+    const yes = prices[0] != null ? (prices[0] * 100).toFixed(0) : "–";
+    const no = prices[1] != null ? (prices[1] * 100).toFixed(0) : "–";
+    outcomesHtml = `
+      <span class="price yes">${yes}¢ Yes</span>
+      <span class="price no">${no}¢ No</span>`;
+  } else {
+    outcomesHtml = outcomes
+      .map((o) => {
+        const p = o.op?.[0];
+        const pct = p != null ? (p * 100).toFixed(0) + "¢" : "–";
+        const label = o.l || shortenQuestion(o.q, r.q);
+        return `<span class="outcome">${escapeHtml(label)} <b>${pct}</b></span>`;
+      })
+      .join("");
+  }
 
-      return `
-      <a href="${url}" target="_blank" rel="noopener" class="result">
-        ${img}
-        <div class="result-body">
-          <div class="result-question">${escapeHtml(r.q)}</div>
-          <div class="result-outcomes">${outcomesHtml}</div>
-          <div class="result-meta">
-            <span class="vol">$${vol} vol</span>
-            ${endDate ? `<span class="end-date">${endDate}</span>` : ""}
-            ${marketCount}
-          </div>
-        </div>
-      </a>`;
-    })
-    .join("");
+  const marketCount = r.mc > outcomes.length
+    ? `<span class="more-markets">+${r.mc - outcomes.length} more</span>`
+    : "";
+
+  return `
+  <a href="${url}" target="_blank" rel="noopener" class="result">
+    ${img}
+    <div class="result-body">
+      <div class="result-question">${escapeHtml(r.q)}</div>
+      <div class="result-outcomes">${outcomesHtml}</div>
+      <div class="result-meta">
+        <span class="vol">$${vol} vol</span>
+        ${endDate ? `<span class="end-date">${endDate}</span>` : ""}
+        ${marketCount}
+      </div>
+    </div>
+  </a>`;
 }
 
 function renderSportsResult(r, url, vol) {
