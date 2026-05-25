@@ -222,8 +222,10 @@ function renderSportCard(r, url) {
     underPct = totalMkt.op?.[1] != null ? Math.round(totalMkt.op[1] * 100) + "%" : "";
   }
 
-  const hasProps = awaySpread || totalNum;
-  const spreadPct = spreadMkt?.op?.[0] != null ? Math.round(spreadMkt.op[0] * 100) + "%" : "";
+  const hasML = awayPct != null || homePct != null;
+  const hasSpread = !!awaySpread;
+  const hasTotal = !!totalNum;
+  const colCount = [hasML, hasSpread, hasTotal].filter(Boolean).length;
 
   const liveHtml = r.live
     ? `<span class="live-badge">Live ${esc(r.per || "")}</span><span class="score">${esc(r.sc || "")}</span>`
@@ -234,29 +236,34 @@ function renderSportCard(r, url) {
   meta.push(`<span>${formatVol(r.v)} vol</span>`);
   if (r.gd || r.ed) meta.push(`<span>${r.gd || r.ed}</span>`);
 
+  const colW = colCount === 0 ? "1fr" : `1fr repeat(${colCount}, 56px)`;
+  const headers = [
+    hasML ? '<span class="sport-col-label">ML</span>' : "",
+    hasSpread ? '<span class="sport-col-label">Spread</span>' : "",
+    hasTotal ? '<span class="sport-col-label">Total</span>' : "",
+  ].join("");
+
   return `
   <a href="${url}" target="_blank" rel="noopener" class="result result-sport" role="listitem" tabindex="0">
-    ${hasProps
-      ? '<div class="sport-header"><span></span><span class="sport-col-label">ML</span><span class="sport-col-label">Spread</span><span class="sport-col-label">Total</span></div>'
-      : '<div class="sport-header sport-header-simple"><span></span><span class="sport-col-label">ML</span></div>'}
-    <div class="sport-grid${hasProps ? "" : " sport-grid-simple"}">
+    ${colCount > 0 ? `<div class="sport-header" style="grid-template-columns:${colW}"><span></span>${headers}</div>` : ""}
+    <div class="sport-grid" style="grid-template-columns:${colW}">
       <div class="sport-team-info">
         ${away.l ? `<img src="${away.l}" alt="" class="team-logo">` : ""}
         <span class="team-name">${esc(away.n)}</span>
         <span class="team-record">${esc(away.r)}</span>
       </div>
-      <span class="sport-cell is-ml${awayPct != null && homePct != null && awayPct >= homePct ? ' is-fav' : ''}">${awayPct != null ? `${awayPct}%` : ""}</span>
-      ${hasProps ? `<span class="sport-cell">${esc(awaySpread)}</span>` : ""}
-      ${hasProps ? `<span class="sport-cell">${totalNum ? `O ${esc(totalNum)}` : ""}</span>` : ""}
+      ${hasML ? `<span class="sport-cell is-ml${awayPct != null && homePct != null && awayPct >= homePct ? " is-fav" : ""}">${awayPct != null ? `${awayPct}%` : ""}</span>` : ""}
+      ${hasSpread ? `<span class="sport-cell">${esc(awaySpread)}</span>` : ""}
+      ${hasTotal ? `<span class="sport-cell">O ${esc(totalNum)}</span>` : ""}
 
       <div class="sport-team-info">
         ${home.l ? `<img src="${home.l}" alt="" class="team-logo">` : ""}
         <span class="team-name">${esc(home.n)}</span>
         <span class="team-record">${esc(home.r)}</span>
       </div>
-      <span class="sport-cell is-ml${homePct != null && awayPct != null && homePct > awayPct ? ' is-fav' : ''}">${homePct != null ? `${homePct}%` : ""}</span>
-      ${hasProps ? `<span class="sport-cell">${esc(homeSpread)}</span>` : ""}
-      ${hasProps ? `<span class="sport-cell">${totalNum ? `U ${esc(totalNum)}` : ""}</span>` : ""}
+      ${hasML ? `<span class="sport-cell is-ml${homePct != null && awayPct != null && homePct > awayPct ? " is-fav" : ""}">${homePct != null ? `${homePct}%` : ""}</span>` : ""}
+      ${hasSpread ? `<span class="sport-cell">${esc(homeSpread)}</span>` : ""}
+      ${hasTotal ? `<span class="sport-cell">U ${esc(totalNum)}</span>` : ""}
     </div>
     <div class="result-meta">${meta.join('<span class="meta-sep"></span>')}</div>
   </a>`;
