@@ -72,6 +72,26 @@ const SYNONYMS = {
   ecb: ["european central bank"],
   boj: ["bank japan"],
   rba: ["reserve bank australia"],
+  mn: ["minnesota"],
+  ca: ["california"],
+  tx: ["texas"],
+  fl: ["florida"],
+  ny: ["new york"],
+  ga: ["georgia"],
+  pa: ["pennsylvania"],
+  az: ["arizona"],
+  mi: ["michigan"],
+  wi: ["wisconsin"],
+  nc: ["north carolina"],
+  oh: ["ohio"],
+  va: ["virginia"],
+  nv: ["nevada"],
+  il: ["illinois"],
+  ma: ["massachusetts"],
+  wa: ["washington"],
+  co: ["colorado"],
+  md: ["maryland"],
+  sc: ["south carolina"],
   rates: ["interest rate", "fed"],
   housing: ["mortgage", "rent", "real estate"],
   mortgage: ["housing"],
@@ -174,6 +194,19 @@ export function search(query, data, limit = 20, config = DEFAULT_CONFIG) {
       const aMatch = a.q.toUpperCase().startsWith(prefix) ? 1 : 0;
       const bMatch = b.q.toUpperCase().startsWith(prefix) ? 1 : 0;
       return bMatch - aMatch || b._score - a._score;
+    });
+  }
+
+  const stateKeyword = query.match(/\b([a-z]{2})\s+(senate|governor|house)\b/i);
+  if (stateKeyword) {
+    const stAbbr = stateKeyword[1].toUpperCase();
+    const stName = SYNONYMS[stateKeyword[1].toLowerCase()]?.[0] || "";
+    const kw = stateKeyword[2].toLowerCase();
+    results.sort((a, b) => {
+      const ql = (s) => s.q.toLowerCase();
+      const aHas = (ql(a).includes(kw) && (ql(a).includes(stName) || a.q.includes(stAbbr))) ? 1 : 0;
+      const bHas = (ql(b).includes(kw) && (ql(b).includes(stName) || b.q.includes(stAbbr))) ? 1 : 0;
+      return bHas - aHas || b._score - a._score;
     });
   }
 

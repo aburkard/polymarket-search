@@ -238,7 +238,7 @@ function renderSportCard(r, url) {
 
   const meta = [];
   if (liveHtml) meta.push(liveHtml);
-  meta.push(`<span>${formatVol(r.v)} vol</span>`);
+  meta.push(`<span>${formatVol(r.vt || r.v)} vol</span>`);
   if (r.gd || r.ed) meta.push(`<span>${r.gd || r.ed}</span>`);
 
   const colW = colCount === 0 ? "1fr" : `1fr repeat(${colCount}, 56px)`;
@@ -278,7 +278,7 @@ function renderSportCard(r, url) {
 
 function buildMeta(r) {
   const parts = [];
-  parts.push(`<span>${formatVol(r.v)} vol</span>`);
+  parts.push(`<span>${formatVol(r.vt || r.v)} vol</span>`);
   if (r.ed) parts.push(`<span>${r.ed}</span>`);
   return parts.join('<span class="meta-sep"></span>');
 }
