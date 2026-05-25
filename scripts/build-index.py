@@ -105,21 +105,30 @@ def _outcome_tier(m: dict, event_title: str) -> int:
     return 5
 
 
+def _closeness_to_even(m: dict) -> float:
+    prices = parse_outcome_prices(m.get("outcomePrices"))
+    if not prices:
+        return 1.0
+    return abs(prices[0] - 0.5)
+
+
 def pick_sports_outcomes(markets: list[dict], event_title: str) -> list[dict]:
-    tiered = sorted(markets, key=lambda m: (
-        _outcome_tier(m, event_title),
-        -float(m.get("volume24hr") or 0),
-    ))
-    seen_tiers: set[int] = set()
-    picked: list[dict] = []
-    for m in tiered:
+    by_tier: dict[int, list[dict]] = {}
+    for m in markets:
         tier = _outcome_tier(m, event_title)
         if tier >= 6:
-            break
-        if tier in seen_tiers and len(picked) >= 3:
             continue
-        seen_tiers.add(tier)
-        picked.append(m)
+        by_tier.setdefault(tier, []).append(m)
+
+    picked: list[dict] = []
+    for tier in sorted(by_tier):
+        candidates = by_tier[tier]
+        if tier in (1, 2, 3):
+            best = min(candidates, key=_closeness_to_even)
+            picked.append(best)
+        else:
+            candidates.sort(key=lambda m: -float(m.get("volume24hr") or 0))
+            picked.append(candidates[0])
         if len(picked) >= 4:
             break
     return picked
