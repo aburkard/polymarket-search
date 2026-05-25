@@ -272,6 +272,10 @@ h1 {
   margin-bottom: 2px;
 }
 
+.sport-header-simple {
+  grid-template-columns: 1fr 56px;
+}
+
 .sport-col-label {
   font-size: 0.6rem;
   font-weight: 600;

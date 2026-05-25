@@ -235,7 +235,9 @@ function renderSportCard(r, url) {
 
   return `
   <a href="${url}" target="_blank" rel="noopener" class="result result-sport" role="listitem" tabindex="0">
-    ${hasProps ? '<div class="sport-header"><span></span><span class="sport-col-label">ML</span><span class="sport-col-label">Spread</span><span class="sport-col-label">Total</span></div>' : ""}
+    ${hasProps
+      ? '<div class="sport-header"><span></span><span class="sport-col-label">ML</span><span class="sport-col-label">Spread</span><span class="sport-col-label">Total</span></div>'
+      : '<div class="sport-header sport-header-simple"><span></span><span class="sport-col-label">ML</span></div>'}
     <div class="sport-grid${hasProps ? "" : " sport-grid-simple"}">
       <div class="sport-team-info">
         ${away.l ? `<img src="${away.l}" alt="" class="team-logo">` : ""}
@@ -343,6 +345,12 @@ window
       }
     }
   });
+
+document.getElementById("site-title").addEventListener("click", () => {
+  input.value = "";
+  handleInput();
+  input.focus();
+});
 
 input.addEventListener("input", handleInput);
 init();
