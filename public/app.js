@@ -141,13 +141,14 @@ function renderCard(r) {
       const p = o.op?.[0];
       return p != null && Math.round(p * 100) >= 1;
     });
-    const show = visible.length ? visible : outcomes.slice(0, 2);
+    const show = (visible.length ? visible : outcomes.slice(0, 2)).slice(0, 3);
     outcomesHtml = show
-      .map((o) => {
+      .map((o, i) => {
         const p = o.op?.[0];
         const pct = p != null ? Math.round(p * 100) + "%" : "–";
         const label = o.l || shortenQuestion(o.q, r.q);
-        return `<span class="outcome">${esc(label)} <b>${pct}</b></span>`;
+        const cls = i === 0 ? "outcome outcome-lead" : "outcome outcome-rest";
+        return `<span class="${cls}">${esc(label)} <b>${pct}</b></span>`;
       })
       .join("");
   }
