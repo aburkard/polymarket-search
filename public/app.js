@@ -16,8 +16,15 @@ async function init() {
     data = prepareIndex(await resp.json());
     statusEl.textContent = `${data.n.toLocaleString()} events loaded`;
     input.disabled = false;
-    input.focus();
-    showTrending();
+    const urlQuery = new URLSearchParams(window.location.search).get("q");
+    if (urlQuery) {
+      input.value = urlQuery;
+      const results = search(urlQuery, data, 12);
+      renderResults(results);
+    } else {
+      input.focus();
+      showTrending();
+    }
   } catch (e) {
     statusEl.textContent = `Failed to load: ${e.message}`;
   }
@@ -71,12 +78,21 @@ function handleInput() {
   selectedIdx = -1;
   debounceTimer = setTimeout(() => {
     const query = input.value.trim();
+    const url = new URL(window.location);
+    if (query) {
+      url.searchParams.set("q", query);
+    } else {
+      url.searchParams.delete("q");
+    }
+    history.replaceState(null, "", url);
+
     if (!query || !data) {
       showTrending();
       return;
     }
     const results = search(query, data, 12);
     renderResults(results);
+    window.scrollTo({ top: 0 });
   }, 80);
 }
 
