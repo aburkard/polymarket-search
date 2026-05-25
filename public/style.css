@@ -267,7 +267,7 @@ h1 {
 
 .sport-header {
   display: grid;
-  grid-template-columns: 1fr repeat(3, 56px);
+  grid-template-columns: 1fr 44px 80px 80px;
   gap: 4px;
   margin-bottom: 2px;
 }
@@ -283,7 +283,7 @@ h1 {
 
 .sport-grid {
   display: grid;
-  grid-template-columns: 1fr repeat(3, 56px);
+  grid-template-columns: 1fr 44px 80px 80px;
   gap: 4px 4px;
   align-items: center;
   margin-bottom: 8px;

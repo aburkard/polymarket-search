@@ -199,30 +199,36 @@ function renderSportCard(r, url) {
   const spreadMkt = (r.mk || []).find((m) => (m.l || "").toLowerCase().startsWith("spread"));
   const totalMkt = (r.mk || []).find((m) => (m.l || "").toLowerCase().startsWith("o/u") && !(m.l || "").toLowerCase().startsWith("1h"));
 
-  let awaySpread = "", homeSpread = "";
+  let awaySpreadLabel = "", homeSpreadLabel = "";
   if (spreadMkt?.l) {
     const num = spreadMkt.l.match(/-?\d+\.?\d*/)?.[0] || "";
     const favInQ = (spreadMkt.q || "").toLowerCase();
-    const awayInFav = favInQ.includes(away.n?.toLowerCase?.() || "___");
-    if (awayInFav) {
-      awaySpread = num ? `-${Math.abs(num)}` : "";
-      homeSpread = num ? `+${Math.abs(num)}` : "";
+    const awayIsFav = favInQ.includes(away.n?.toLowerCase?.() || "___");
+    const yesPct = spreadMkt.op?.[0] != null ? Math.round(spreadMkt.op[0] * 100) : null;
+    const noPct = spreadMkt.op?.[1] != null ? Math.round(spreadMkt.op[1] * 100) : null;
+    if (awayIsFav) {
+      awaySpreadLabel = num ? `-${Math.abs(num)}` : "";
+      homeSpreadLabel = num ? `+${Math.abs(num)}` : "";
+      if (yesPct != null) awaySpreadLabel += ` ${yesPct}%`;
+      if (noPct != null) homeSpreadLabel += ` ${noPct}%`;
     } else {
-      homeSpread = num ? `-${Math.abs(num)}` : "";
-      awaySpread = num ? `+${Math.abs(num)}` : "";
+      homeSpreadLabel = num ? `-${Math.abs(num)}` : "";
+      awaySpreadLabel = num ? `+${Math.abs(num)}` : "";
+      if (yesPct != null) homeSpreadLabel += ` ${yesPct}%`;
+      if (noPct != null) awaySpreadLabel += ` ${noPct}%`;
     }
   }
 
-  let totalNum = "";
-  let overPct = "", underPct = "";
+  let awayTotalLabel = "", homeTotalLabel = "";
   if (totalMkt?.l) {
-    totalNum = totalMkt.l.match(/\d+\.?\d*/)?.[0] || "";
-    overPct = totalMkt.op?.[0] != null ? Math.round(totalMkt.op[0] * 100) + "%" : "";
-    underPct = totalMkt.op?.[1] != null ? Math.round(totalMkt.op[1] * 100) + "%" : "";
+    const num = totalMkt.l.match(/\d+\.?\d*/)?.[0] || "";
+    const overPct = totalMkt.op?.[0] != null ? Math.round(totalMkt.op[0] * 100) : null;
+    const underPct = totalMkt.op?.[1] != null ? Math.round(totalMkt.op[1] * 100) : null;
+    awayTotalLabel = `O ${num}${overPct != null ? ` ${overPct}%` : ""}`;
+    homeTotalLabel = `U ${num}${underPct != null ? ` ${underPct}%` : ""}`;
   }
 
-  const hasProps = awaySpread || totalNum;
-  const spreadPct = spreadMkt?.op?.[0] != null ? Math.round(spreadMkt.op[0] * 100) + "%" : "";
+  const hasProps = awaySpreadLabel || awayTotalLabel;
 
   const liveHtml = r.live
     ? `<span class="live-badge">Live ${esc(r.per || "")}</span><span class="score">${esc(r.sc || "")}</span>`
@@ -243,8 +249,8 @@ function renderSportCard(r, url) {
         <span class="team-record">${esc(away.r)}</span>
       </div>
       <span class="sport-cell">${awayPct != null ? `${awayPct}%` : ""}</span>
-      ${hasProps ? `<span class="sport-cell">${esc(awaySpread)}</span>` : ""}
-      ${hasProps ? `<span class="sport-cell">${totalNum ? `O ${esc(totalNum)}` : ""}</span>` : ""}
+      ${hasProps ? `<span class="sport-cell">${esc(awaySpreadLabel)}</span>` : ""}
+      ${hasProps ? `<span class="sport-cell">${esc(awayTotalLabel)}</span>` : ""}
 
       <div class="sport-team-info">
         ${home.l ? `<img src="${home.l}" alt="" class="team-logo">` : ""}
@@ -252,8 +258,8 @@ function renderSportCard(r, url) {
         <span class="team-record">${esc(home.r)}</span>
       </div>
       <span class="sport-cell">${homePct != null ? `${homePct}%` : ""}</span>
-      ${hasProps ? `<span class="sport-cell">${esc(homeSpread)}</span>` : ""}
-      ${hasProps ? `<span class="sport-cell">${totalNum ? `U ${esc(totalNum)}` : ""}</span>` : ""}
+      ${hasProps ? `<span class="sport-cell">${esc(homeSpreadLabel)}</span>` : ""}
+      ${hasProps ? `<span class="sport-cell">${esc(homeTotalLabel)}</span>` : ""}
     </div>
     <div class="result-meta">${meta.join('<span class="meta-sep"></span>')}</div>
   </a>`;
