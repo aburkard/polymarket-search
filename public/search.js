@@ -43,6 +43,58 @@ export function levenshtein(a, b) {
   return dp[m][n];
 }
 
+const SYNONYMS = {
+  btc: ["bitcoin"],
+  bitcoin: ["btc"],
+  eth: ["ethereum", "ether"],
+  ethereum: ["eth"],
+  sol: ["solana"],
+  solana: ["sol"],
+  xrp: ["ripple"],
+  ripple: ["xrp"],
+  doge: ["dogecoin"],
+  dogecoin: ["doge"],
+  cpi: ["inflation", "consumer price index"],
+  gdp: ["economic growth", "gross domestic product"],
+  fomc: ["fed", "federal reserve"],
+  potus: ["president", "trump"],
+  scotus: ["supreme court"],
+  aoc: ["ocasio-cortez", "ocasio"],
+  epl: ["premier league"],
+  ufc: ["mma"],
+  mma: ["ufc"],
+  wemby: ["wembanyama"],
+  sga: ["gilgeous-alexander", "gilgeous"],
+  ai: ["artificial intelligence"],
+  ipo: ["going public", "public offering"],
+  nato: ["north atlantic treaty"],
+  jcpoa: ["iran nuclear deal"],
+  ecb: ["european central bank"],
+  boj: ["bank japan"],
+  rba: ["reserve bank australia"],
+};
+
+function expandQuery(terms) {
+  const expanded = [];
+  const termOrigin = new Map();
+  for (const t of terms) {
+    expanded.push(t);
+    termOrigin.set(t, t);
+    const syns = SYNONYMS[t];
+    if (syns) {
+      for (const syn of syns) {
+        for (const st of tokenize(syn)) {
+          if (!termOrigin.has(st)) {
+            expanded.push(st);
+            termOrigin.set(st, t);
+          }
+        }
+      }
+    }
+  }
+  return { expanded, termOrigin };
+}
+
 export function prepareIndex(data) {
   data._vocab = Object.keys(data.idx);
   data._ctxVocab = data.ctx ? Object.keys(data.ctx) : [];
@@ -50,8 +102,10 @@ export function prepareIndex(data) {
 }
 
 export function search(query, data, limit = 20, config = DEFAULT_CONFIG) {
-  const terms = tokenize(query);
-  if (!terms.length) return [];
+  const rawTerms = tokenize(query);
+  if (!rawTerms.length) return [];
+  const { expanded: terms, termOrigin } = expandQuery(rawTerms);
+  const nTerms = rawTerms.length;
 
   const C = config;
   const vocab = data._vocab || Object.keys(data.idx);
@@ -78,12 +132,11 @@ export function search(query, data, limit = 20, config = DEFAULT_CONFIG) {
     for (const [docIdx, score] of merged) {
       scores.set(docIdx, (scores.get(docIdx) || 0) + score);
       if (!termHits.has(docIdx)) termHits.set(docIdx, new Set());
-      termHits.get(docIdx).add(term);
+      termHits.get(docIdx).add(termOrigin.get(term) || term);
     }
   }
 
-  const nTerms = terms.length;
-  const queryYears = terms.filter((t) => /^20\d{2}$/.test(t));
+  const queryYears = rawTerms.filter((t) => /^20\d{2}$/.test(t));
 
   const results = [];
   for (const [docIdx, textScore] of scores) {
