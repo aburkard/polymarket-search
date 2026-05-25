@@ -132,12 +132,13 @@ function renderCard(r) {
     const pct = p != null ? Math.round(p * 100) : null;
     if (pct != null) {
       const yesLeads = pct >= 50;
+      const thin = outcomes[0].thin ? " is-thin" : "";
       rowsHtml = `
-        <div class="outcome-row ${yesLeads ? "" : "is-dim"}">
+        <div class="outcome-row ${yesLeads ? "" : "is-dim"}${thin}">
           <span class="outcome-label">Yes</span>
           <span class="outcome-pct">${pct}%${priceTipHtml(outcomes[0])}</span>
         </div>
-        <div class="outcome-row ${yesLeads ? "is-dim is-no" : "is-no"}">
+        <div class="outcome-row ${yesLeads ? "is-dim is-no" : "is-no"}${thin}">
           <span class="outcome-label">No</span>
           <span class="outcome-pct">${100 - pct}%</span>
         </div>`;
@@ -158,9 +159,10 @@ function renderCard(r) {
         const pct = p != null ? Math.round(p * 100) + "%" : "–";
         const label = o.l || shortenQuestion(o.q, r.q);
         const oImg = o.im ? `<img src="${o.im}" alt="" class="outcome-icon" loading="lazy">` : "";
+        const thin = o.thin ? " is-thin" : "";
         const cls = isTemporal ? " is-temporal" : (i > 0 ? " is-dim" : "");
         return `
-        <div class="outcome-row${cls}">
+        <div class="outcome-row${cls}${thin}">
           ${oImg}<span class="outcome-label">${esc(label)}</span>
           <span class="outcome-pct">${pct}${priceTipHtml(o)}</span>
         </div>`;

@@ -326,18 +326,20 @@ def build_index(events: list[dict]) -> dict:
             else:
                 display_prices = raw_prices
 
+            bid = float(m.get("bestBid") or 0)
+            ask = float(m.get("bestAsk") or 1)
+            spread = ask - bid if m.get("bestBid") is not None else 0
+
             o = {
                 "q": m.get("question", ""),
                 "l": m.get("groupItemTitle", ""),
                 "op": display_prices,
                 "v": round(float(m.get("volume24hr") or 0)),
             }
-            bid = m.get("bestBid")
-            ask = m.get("bestAsk")
-            last = m.get("lastTradePrice")
-            if bid is not None: o["bid"] = round(float(bid), 4)
-            if ask is not None: o["ask"] = round(float(ask), 4)
-            if last is not None: o["last"] = round(float(last), 4)
+            if m.get("bestBid") is not None: o["bid"] = round(float(m["bestBid"]), 4)
+            if m.get("bestAsk") is not None: o["ask"] = round(float(m["bestAsk"]), 4)
+            if m.get("lastTradePrice") is not None: o["last"] = round(float(m["lastTradePrice"]), 4)
+            if spread >= 0.10: o["thin"] = 1
             mimg = m.get("image") or m.get("icon") or ""
             if mimg and mimg != ev.get("image", ""):
                 o["im"] = mimg

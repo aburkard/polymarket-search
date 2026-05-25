@@ -250,6 +250,8 @@ h1 {
 
 .outcome-row.is-no .outcome-pct { color: var(--red); }
 
+.outcome-row.is-thin .outcome-pct { opacity: 0.45; }
+
 .outcome-row.is-temporal .outcome-pct { color: var(--text-muted); font-weight: 500; }
 
 .outcome-more {
