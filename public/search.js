@@ -1,5 +1,17 @@
-const K1 = 1.2;
-const B = 0.3;
+export const DEFAULT_CONFIG = {
+  bm25K1: 1.2,
+  bm25B: 0.75,
+  ctxWeight: 0.7,
+  prefixDiscount: 0.5,
+  fuzzyMinLen: 4,
+  fuzzyMaxDistFrac: 0.25,
+  fuzzyDiscount: 0.3,
+  volWeight24h: 0.4,
+  volWeightTotal: 0.1,
+  coverageExp: 3,
+  yearBoostMatch: 3,
+  yearBoostMiss: 0.05,
+};
 
 export function tokenize(text) {
   return text
@@ -37,10 +49,11 @@ export function prepareIndex(data) {
   return data;
 }
 
-export function search(query, data, limit = 20) {
+export function search(query, data, limit = 20, config = DEFAULT_CONFIG) {
   const terms = tokenize(query);
   if (!terms.length) return [];
 
+  const C = config;
   const vocab = data._vocab || Object.keys(data.idx);
   const ctxVocab = data._ctxVocab || [];
   const ctxIdx = data.ctx || {};
@@ -51,14 +64,14 @@ export function search(query, data, limit = 20) {
   const termHits = new Map();
 
   for (const term of terms) {
-    const baseMatches = findMatches(term, data.idx, data.idf, vocab, dl, avgDl);
+    const baseMatches = findMatches(term, data.idx, data.idf, vocab, dl, avgDl, C);
     const ctxMatches = data.ctx
-      ? findMatches(term, ctxIdx, data.idf, ctxVocab, dl, avgDl)
+      ? findMatches(term, ctxIdx, data.idf, ctxVocab, dl, avgDl, C)
       : new Map();
 
     const merged = new Map(baseMatches);
     for (const [docIdx, score] of ctxMatches) {
-      const discounted = score * 0.3;
+      const discounted = score * C.ctxWeight;
       merged.set(docIdx, Math.max(merged.get(docIdx) || 0, discounted));
     }
 
@@ -75,14 +88,18 @@ export function search(query, data, limit = 20) {
   const results = [];
   for (const [docIdx, textScore] of scores) {
     const doc = data.docs[docIdx];
-    const volBoost = Math.log1p(doc.v) * 0.4 + Math.log1p(doc.vt) * 0.2;
+    const volBoost =
+      Math.log1p(doc.v) * C.volWeight24h +
+      Math.log1p(doc.vt) * C.volWeightTotal;
     const coverage = termHits.get(docIdx).size / nTerms;
-    const coveragePenalty = coverage * coverage * coverage;
+    const coveragePenalty = Math.pow(coverage, C.coverageExp);
 
     let yearBoost = 1;
     if (queryYears.length && doc.ed) {
       const docYear = doc.ed.slice(0, 4);
-      yearBoost = queryYears.includes(docYear) ? 3 : 0.1;
+      yearBoost = queryYears.includes(docYear)
+        ? C.yearBoostMatch
+        : C.yearBoostMiss;
     }
 
     results.push({
@@ -96,13 +113,15 @@ export function search(query, data, limit = 20) {
   return results.slice(0, limit);
 }
 
-function bm25Score(tf, idf, docLen, avgDl) {
+function bm25Score(tf, idf, docLen, avgDl, K1, B) {
   const norm = 1 - B + B * (docLen / avgDl);
   return idf * ((tf * (K1 + 1)) / (tf + K1 * norm));
 }
 
-function findMatches(term, idx, idf, vocab, dl, avgDl) {
+function findMatches(term, idx, idf, vocab, dl, avgDl, C) {
   const seen = new Map();
+  const K1 = C.bm25K1;
+  const B = C.bm25B;
 
   function add(docIdx, score) {
     seen.set(docIdx, Math.max(seen.get(docIdx) || 0, score));
@@ -114,7 +133,7 @@ function findMatches(term, idx, idf, vocab, dl, avgDl) {
     for (const posting of idx[term]) {
       const [docIdx, tf] = posting;
       const docLen = dl[docIdx] || avgDl;
-      add(docIdx, bm25Score(tf, termIdf, docLen, avgDl));
+      add(docIdx, bm25Score(tf, termIdf, docLen, avgDl, K1, B));
     }
   }
 
@@ -125,13 +144,13 @@ function findMatches(term, idx, idf, vocab, dl, avgDl) {
       for (const posting of idx[vt]) {
         const [docIdx, tf] = posting;
         const docLen = dl[docIdx] || avgDl;
-        add(docIdx, bm25Score(tf, vtIdf, docLen, avgDl) * 0.8);
+        add(docIdx, bm25Score(tf, vtIdf, docLen, avgDl, K1, B) * C.prefixDiscount);
       }
     }
   }
 
-  if (term.length >= 4) {
-    const maxDist = Math.ceil(term.length * 0.25);
+  if (term.length >= C.fuzzyMinLen) {
+    const maxDist = Math.ceil(term.length * C.fuzzyMaxDistFrac);
     for (const vt of vocab) {
       if (vt === term || vt.startsWith(term)) continue;
       if (Math.abs(vt.length - term.length) > maxDist) continue;
@@ -139,11 +158,11 @@ function findMatches(term, idx, idf, vocab, dl, avgDl) {
       const dist = levenshtein(term, vt);
       if (dist <= maxDist) {
         const vtIdf = idf[vt] || 0;
-        const fuzzyDiscount = (1 - dist / term.length) * 0.6;
+        const fuzzyMult = (1 - dist / term.length) * C.fuzzyDiscount;
         for (const posting of idx[vt]) {
           const [docIdx, tf] = posting;
           const docLen = dl[docIdx] || avgDl;
-          add(docIdx, bm25Score(tf, vtIdf, docLen, avgDl) * fuzzyDiscount);
+          add(docIdx, bm25Score(tf, vtIdf, docLen, avgDl, K1, B) * fuzzyMult);
         }
       }
     }
