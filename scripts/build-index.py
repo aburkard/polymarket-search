@@ -134,6 +134,35 @@ def pick_sports_outcomes(markets: list[dict], event_title: str) -> list[dict]:
     return picked
 
 
+def _best_price(m: dict) -> float:
+    """Pick the most meaningful price for a market.
+
+    For tight spreads (<5¢), mid is reliable.
+    For wide spreads, use the best signal available:
+    - max(bid, last) — bid is what someone will pay NOW,
+      last is what someone DID pay. Take the higher of the two.
+    - Fall back to mid if nothing else.
+    """
+    prices = parse_outcome_prices(m.get("outcomePrices"))
+    mid = prices[0] if prices else 0
+
+    if m.get("bestBid") is None and m.get("bestAsk") is None:
+        return mid
+
+    bid = float(m.get("bestBid") or 0)
+    ask = float(m.get("bestAsk") or 1)
+    spread = ask - bid
+    last = float(m.get("lastTradePrice") or 0)
+
+    if spread < 0.05:
+        return mid
+    if max(bid, last) > 0:
+        return max(bid, last)
+    if spread > 0.8:
+        return 0
+    return mid
+
+
 STOP_WORDS = {
     "the", "be", "to", "of", "and", "in", "that", "have", "it", "for",
     "not", "on", "with", "he", "as", "you", "do", "at", "this", "but",
@@ -248,17 +277,12 @@ def build_index(events: list[dict]) -> dict:
 
         norm_factor = 1
         if is_exclusive and len(active_markets) > 1:
-            meaningful_prices = []
+            best_prices = []
             for m in active_markets:
-                prices = parse_outcome_prices(m.get("outcomePrices"))
-                if not prices:
-                    continue
-                p = prices[0]
-                vol = float(m.get("volume") or 0)
-                if vol >= 50 or abs(p - 0.5) > 0.1:
-                    meaningful_prices.append(p)
-            if len(meaningful_prices) > 1:
-                norm_factor = sum(meaningful_prices)
+                best_prices.append(_best_price(m))
+            meaningful = [p for p in best_prices if p > 0.005]
+            if len(meaningful) > 1:
+                norm_factor = sum(meaningful)
 
         total_vol24 = sum(float(m.get("volume24hr") or 0) for m in active_markets)
         total_vol = sum(float(m.get("volume") or 0) for m in active_markets)
@@ -288,11 +312,16 @@ def build_index(events: list[dict]) -> dict:
         outcomes = []
         for m in top_markets:
             raw_prices = parse_outcome_prices(m.get("outcomePrices"))
-            if len(active_markets) > 1 and norm_factor > 0 and raw_prices:
-                normed = [round(raw_prices[0] / norm_factor, 4)]
+            best = _best_price(m)
+            if is_exclusive and norm_factor > 0 and len(active_markets) > 1:
+                normed = [round(best / norm_factor, 4)]
                 if len(raw_prices) > 1:
                     normed.append(round(1 - normed[0], 4))
                 display_prices = normed
+            elif best != (raw_prices[0] if raw_prices else 0):
+                display_prices = [round(best, 4)]
+                if len(raw_prices) > 1:
+                    display_prices.append(round(1 - best, 4))
             else:
                 display_prices = raw_prices
 

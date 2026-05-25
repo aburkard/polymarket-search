@@ -146,7 +146,7 @@ EXCLUSIVE_WITH_DEAD = {
          "endDate": "2026-12-31T00:00:00Z", "image": ""},
         {"id": "1203", "question": "Will Nobody win?", "slug": "nobody", "closed": False,
          "volume": "5", "volume24hr": "0", "groupItemTitle": "Nobody",
-         "outcomePrices": '["0.50", "0.50"]',
+         "outcomePrices": '["0.50", "0.50"]', "bestBid": "0", "bestAsk": "1", "lastTradePrice": "0",
          "endDate": "2026-12-31T00:00:00Z", "image": ""},
     ],
 }
