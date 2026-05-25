@@ -72,6 +72,9 @@ const SYNONYMS = {
   ecb: ["european central bank"],
   boj: ["bank japan"],
   rba: ["reserve bank australia"],
+  rates: ["interest rate", "fed"],
+  housing: ["mortgage", "rent", "real estate"],
+  mortgage: ["housing"],
 };
 
 function expandQuery(terms) {
