@@ -40,6 +40,7 @@ document.addEventListener("keydown", (e) => {
     }
   }
   if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    if (document.activeElement !== input && selectedIdx < 0) return;
     const cards = resultsEl.querySelectorAll(".result");
     if (!cards.length) return;
     e.preventDefault();
