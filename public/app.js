@@ -118,8 +118,7 @@ function renderCard(r) {
         <div class="yes-no">
           <span class="yes">${pct}% Yes</span>
           <span class="no">${100 - pct}% No</span>
-        </div>
-        <div class="prob-bar"><div class="prob-bar-fill" style="width:${pct}%"></div></div>`;
+        </div>`;
     }
   } else if (outcomes.length > 1) {
     outcomesHtml = outcomes
