@@ -243,11 +243,6 @@ h1 {
   min-width: 36px;
 }
 
-.outcome-pct[title] {
-  cursor: help;
-  text-decoration: underline dotted var(--text-muted);
-  text-underline-offset: 2px;
-}
 
 .outcome-row.is-dim .outcome-label { color: var(--text-muted); }
 .outcome-row.is-dim .outcome-pct { color: var(--text-muted); font-weight: 500; }

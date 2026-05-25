@@ -132,11 +132,10 @@ function renderCard(r) {
     const pct = p != null ? Math.round(p * 100) : null;
     if (pct != null) {
       const yesLeads = pct >= 50;
-      const tip = priceTooltip(outcomes[0]);
       rowsHtml = `
         <div class="outcome-row ${yesLeads ? "" : "is-dim"}">
           <span class="outcome-label">Yes</span>
-          <span class="outcome-pct"${tip}>${pct}%</span>
+          <span class="outcome-pct">${pct}%</span>
         </div>
         <div class="outcome-row ${yesLeads ? "is-dim is-no" : "is-no"}">
           <span class="outcome-label">No</span>
@@ -160,11 +159,10 @@ function renderCard(r) {
         const label = o.l || shortenQuestion(o.q, r.q);
         const oImg = o.im ? `<img src="${o.im}" alt="" class="outcome-icon" loading="lazy">` : "";
         const cls = isTemporal ? " is-temporal" : (i > 0 ? " is-dim" : "");
-        const tip = priceTooltip(o);
         return `
         <div class="outcome-row${cls}">
           ${oImg}<span class="outcome-label">${esc(label)}</span>
-          <span class="outcome-pct"${tip}>${pct}</span>
+          <span class="outcome-pct">${pct}</span>
         </div>`;
       })
       .join("");
@@ -277,15 +275,6 @@ function renderSportCard(r, url) {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
-
-function priceTooltip(o) {
-  const parts = [];
-  if (o.bid != null) parts.push(`Bid: ${Math.round(o.bid * 100)}¢`);
-  if (o.ask != null) parts.push(`Ask: ${Math.round(o.ask * 100)}¢`);
-  if (o.last != null) parts.push(`Last: ${Math.round(o.last * 100)}¢`);
-  if (!parts.length) return "";
-  return ` title="${parts.join("  ·  ")}"`;
-}
 
 function buildMeta(r) {
   const parts = [];
