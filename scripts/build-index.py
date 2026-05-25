@@ -40,7 +40,7 @@ def fetch_all_events() -> list[dict]:
         qs = urllib.parse.urlencode({
             "active": "true",
             "closed": "false",
-            "limit": 500,
+            "limit": 100,
             "offset": offset,
         })
         url = f"{BASE}/events?{qs}"
@@ -61,9 +61,9 @@ def fetch_all_events() -> list[dict]:
         events.extend(page)
         print(f"  fetched offset={offset} got={len(page)} total={len(events)}")
 
-        if len(page) < 500:
+        if len(page) < 100:
             break
-        offset += 500
+        offset += 100
 
     return events
 
@@ -127,9 +127,13 @@ def build_index(events: list[dict]) -> dict:
         total_vol24 = sum(float(m.get("volume24hr") or 0) for m in active_markets)
         total_vol = sum(float(m.get("volume") or 0) for m in active_markets)
 
+        def market_sort_price(m):
+            prices = parse_outcome_prices(m.get("outcomePrices"))
+            return prices[0] if prices else 0
+
         top_markets = sorted(
             active_markets,
-            key=lambda m: float(m.get("volume24hr") or 0),
+            key=market_sort_price,
             reverse=True,
         )[:5]
 
