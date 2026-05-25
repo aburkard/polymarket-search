@@ -263,7 +263,7 @@ h1 {
 }
 
 .yes-no .yes { color: var(--green); }
-.yes-no .no { color: var(--text-muted); }
+.yes-no .no { color: var(--red); }
 
 .prob-bar {
   width: 48px;
