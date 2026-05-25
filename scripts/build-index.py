@@ -260,12 +260,16 @@ def build_index(events: list[dict]) -> dict:
 
         outcomes = []
         for m in top_markets:
-            outcomes.append({
+            o = {
                 "q": m.get("question", ""),
                 "l": m.get("groupItemTitle", ""),
                 "op": parse_outcome_prices(m.get("outcomePrices")),
                 "v": round(float(m.get("volume24hr") or 0)),
-            })
+            }
+            mimg = m.get("image") or m.get("icon") or ""
+            if mimg and mimg != ev.get("image", ""):
+                o["im"] = mimg
+            outcomes.append(o)
 
         doc = {
             "q": event_title,

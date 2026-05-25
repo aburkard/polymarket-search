@@ -153,9 +153,10 @@ function renderCard(r) {
         const p = o.op?.[0];
         const pct = p != null ? Math.round(p * 100) + "%" : "–";
         const label = o.l || shortenQuestion(o.q, r.q);
+        const oImg = o.im ? `<img src="${o.im}" alt="" class="outcome-icon" loading="lazy">` : "";
         return `
         <div class="outcome-row${i > 0 ? " is-dim" : ""}">
-          <span class="outcome-label">${esc(label)}</span>
+          ${oImg}<span class="outcome-label">${esc(label)}</span>
           <span class="outcome-pct">${pct}</span>
         </div>`;
       })

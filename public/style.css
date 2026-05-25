@@ -217,6 +217,14 @@ h1 {
   line-height: 1.4;
 }
 
+.outcome-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
 .outcome-label {
   flex: 1;
   min-width: 0;
