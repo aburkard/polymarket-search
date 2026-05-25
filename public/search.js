@@ -30,6 +30,7 @@ export function levenshtein(a, b) {
 
 export function prepareIndex(data) {
   data._vocab = Object.keys(data.idx);
+  data._ctxVocab = data.ctx ? Object.keys(data.ctx) : [];
   return data;
 }
 
@@ -41,9 +42,22 @@ export function search(query, data, limit = 20) {
   const scores = new Map();
   const termHits = new Map();
 
+  const ctxVocab = data._ctxVocab || [];
+  const ctxIdx = data.ctx || {};
+
   for (const term of terms) {
-    const matches = findMatches(term, data.idx, data.idf, vocab);
-    for (const [docIdx, score] of matches) {
+    const baseMatches = findMatches(term, data.idx, data.idf, vocab);
+    const ctxMatches = data.ctx
+      ? findMatches(term, ctxIdx, data.idf, ctxVocab)
+      : new Map();
+
+    const merged = new Map(baseMatches);
+    for (const [docIdx, score] of ctxMatches) {
+      const discounted = score * 0.3;
+      merged.set(docIdx, Math.max(merged.get(docIdx) || 0, discounted));
+    }
+
+    for (const [docIdx, score] of merged) {
       scores.set(docIdx, (scores.get(docIdx) || 0) + score);
       if (!termHits.has(docIdx)) termHits.set(docIdx, new Set());
       termHits.get(docIdx).add(term);
@@ -51,16 +65,25 @@ export function search(query, data, limit = 20) {
   }
 
   const nTerms = terms.length;
+  const queryYears = terms.filter((t) => /^20\d{2}$/.test(t));
+
   const results = [];
   for (const [docIdx, textScore] of scores) {
     const doc = data.docs[docIdx];
     const volBoost = Math.log1p(doc.v) * 0.4 + Math.log1p(doc.vt) * 0.2;
     const coverage = termHits.get(docIdx).size / nTerms;
-    const coveragePenalty = coverage * coverage;
+    const coveragePenalty = coverage * coverage * coverage;
+
+    let yearBoost = 1;
+    if (queryYears.length && doc.ed) {
+      const docYear = doc.ed.slice(0, 4);
+      yearBoost = queryYears.includes(docYear) ? 2 : 0.3;
+    }
+
     results.push({
       ...doc,
       _idx: docIdx,
-      _score: textScore * coveragePenalty * (1 + volBoost),
+      _score: textScore * coveragePenalty * (1 + volBoost) * yearBoost,
     });
   }
 

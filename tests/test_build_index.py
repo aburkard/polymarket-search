@@ -219,7 +219,7 @@ class TestBuildIndex(unittest.TestCase):
                              f"Duplicate doc indices for term '{term}'")
 
     def test_version_and_timestamp(self):
-        self.assertEqual(self.data["v"], 1)
+        self.assertEqual(self.data["v"], 2)
         self.assertIn("ts", self.data)
         self.assertRegex(self.data["ts"], r"\d{4}-\d{2}-\d{2}T")
 

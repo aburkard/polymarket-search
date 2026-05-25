@@ -134,9 +134,36 @@ def pick_sports_outcomes(markets: list[dict], event_title: str) -> list[dict]:
     return picked
 
 
+STOP_WORDS = {
+    "the", "be", "to", "of", "and", "in", "that", "have", "it", "for",
+    "not", "on", "with", "he", "as", "you", "do", "at", "this", "but",
+    "his", "by", "from", "they", "we", "say", "her", "she", "or", "an",
+    "will", "my", "one", "all", "would", "there", "their", "what", "so",
+    "up", "out", "if", "about", "who", "get", "which", "go", "me", "when",
+    "make", "can", "like", "time", "no", "just", "him", "know", "take",
+    "people", "into", "year", "your", "good", "some", "could", "them",
+    "see", "other", "than", "then", "now", "look", "only", "come", "its",
+    "over", "think", "also", "back", "after", "use", "two", "how", "our",
+    "work", "first", "well", "way", "even", "new", "want", "because",
+    "any", "these", "give", "day", "most", "us", "has", "been", "had",
+    "are", "was", "were", "did", "does", "is", "am", "may", "might",
+    "more", "between", "since", "while", "during", "before", "under",
+    "through", "against", "both", "each", "few", "those", "own", "same",
+    "where", "such", "should", "still", "last", "much", "another",
+    "following", "recent", "among", "ahead", "per", "amid", "including",
+    "current", "within", "across", "leading", "driven", "expected",
+    "according", "based", "around", "however", "despite", "whether",
+    "likely", "remains", "continued", "significant", "announced",
+    "trader", "traders", "consensus", "probability", "implied",
+    "market", "markets", "trading", "volume", "confidence", "pricing",
+    "momentum", "sentiment", "activity", "positions", "bets",
+}
+
+
 def build_index(events: list[dict]) -> dict:
     docs = []
     idx: dict[str, list[int]] = {}
+    ctx: dict[str, list[int]] = {}
     df: dict[str, int] = {}
 
     for ev in events:
@@ -163,13 +190,22 @@ def build_index(events: list[dict]) -> dict:
         doc_idx = len(docs)
 
         market_questions = " ".join(m.get("question", "") for m in active_markets)
-        text = f"{event_title} {market_questions} {tag_labels}"
-        terms = set(tokenize(text))
+        base_text = f"{event_title} {market_questions} {tag_labels}"
+        base_terms = set(tokenize(base_text))
 
-        for t in terms:
+        context_raw = (ev.get("eventMetadata") or {}).get("context_description", "")
+        context_terms = set(tokenize(context_raw)) - base_terms - STOP_WORDS
+
+        for t in base_terms:
             if t not in idx:
                 idx[t] = []
             idx[t].append(doc_idx)
+            df[t] = df.get(t, 0) + 1
+
+        for t in context_terms:
+            if t not in ctx:
+                ctx[t] = []
+            ctx[t].append(doc_idx)
             df[t] = df.get(t, 0) + 1
 
         total_vol24 = sum(float(m.get("volume24hr") or 0) for m in active_markets)
@@ -228,11 +264,12 @@ def build_index(events: list[dict]) -> dict:
         idf[term] = round(math.log(n / freq), 4)
 
     return {
-        "v": 1,
+        "v": 2,
         "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "n": n,
         "idf": idf,
         "idx": idx,
+        "ctx": ctx,
         "docs": docs,
     }
 
