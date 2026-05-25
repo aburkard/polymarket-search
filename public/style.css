@@ -246,7 +246,7 @@ h1 {
 #results {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .section-label {
@@ -390,11 +390,12 @@ h1 {
 }
 
 .meta-sep {
-  width: 2px;
-  height: 2px;
+  width: 3px;
+  height: 3px;
   border-radius: 50%;
   background: var(--text-muted);
   flex-shrink: 0;
+  opacity: 0.6;
 }
 
 /* ── Sports ────────────────────────────────────────────────────────── */

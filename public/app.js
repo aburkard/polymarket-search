@@ -75,7 +75,7 @@ function handleInput() {
       showTrending();
       return;
     }
-    const results = search(query, data, 20);
+    const results = search(query, data, 12);
     renderResults(results);
   }, 80);
 }
