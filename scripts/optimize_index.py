@@ -76,12 +76,20 @@ def optimize():
     data.pop("_n_enriched", None)
 
     optimized = json.dumps(data, separators=(",", ":"))
+
+    # Write as JS literal for streaming parse
+    js_path = INDEX_FILE.parent / "search-data.js"
+    js_content = f"self.__SD__={optimized};"
+    js_path.write_text(js_content)
+
+    # Also write JSON for backwards compat / debugging
     INDEX_FILE.write_text(optimized)
 
-    new_size = len(optimized)
-    saved = original_size - new_size
+    new_size = len(js_content)
+    saved = original_size - len(optimized)
     print(f"Original: {original_size / 1024 / 1024:.2f} MB")
-    print(f"Optimized: {new_size / 1024 / 1024:.2f} MB")
+    print(f"Optimized: {len(optimized) / 1024 / 1024:.2f} MB")
+    print(f"JS literal: {new_size / 1024 / 1024:.2f} MB")
     print(f"Saved: {saved / 1024:.0f} KB ({saved / original_size * 100:.1f}%)")
 
 

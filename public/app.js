@@ -21,34 +21,38 @@ function expandImages(data) {
   }
 }
 
-async function init() {
-  statusEl.textContent = "Loading…";
+function onDataReady() {
+  const raw = self.__SD__;
+  if (!raw) {
+    statusEl.textContent = "Failed to load data";
+    return;
+  }
+  expandImages(raw);
+  data = prepareIndex(raw);
+
+  statusEl.textContent = `${data.n.toLocaleString()} markets`;
   input.disabled = false;
-  input.focus();
+  const urlQuery = new URLSearchParams(window.location.search).get("q");
+  if (urlQuery) {
+    input.value = urlQuery;
+    const results = search(urlQuery, data, 12);
+    renderResults(results);
+  } else {
+    input.focus();
+    showTrending();
+  }
+}
 
-  try {
-    const resp = await fetch("search-data.json");
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const text = await resp.text();
-    statusEl.textContent = "Indexing…";
-
-    // Yield to let the UI update before heavy parse
-    await new Promise((r) => setTimeout(r, 0));
-    const raw = JSON.parse(text);
-    expandImages(raw);
-    data = prepareIndex(raw);
-
-    statusEl.textContent = `${data.n.toLocaleString()} markets`;
-    const urlQuery = new URLSearchParams(window.location.search).get("q");
-    if (urlQuery) {
-      input.value = urlQuery;
-      const results = search(urlQuery, data, 12);
-      renderResults(results);
-    } else {
-      showTrending();
-    }
-  } catch (e) {
-    statusEl.textContent = `Failed to load: ${e.message}`;
+function init() {
+  statusEl.textContent = "Loading…";
+  if (self.__SD__) {
+    onDataReady();
+  } else {
+    const script = document.createElement("script");
+    script.src = "search-data.js";
+    script.onload = onDataReady;
+    script.onerror = () => { statusEl.textContent = "Failed to load data"; };
+    document.head.appendChild(script);
   }
 }
 
