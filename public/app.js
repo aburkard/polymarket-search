@@ -125,14 +125,15 @@ function renderCard(r) {
       const p = o.op?.[0];
       return p != null && Math.round(p * 100) >= 1;
     });
-    outcomesHtml = (visible.length ? visible : outcomes.slice(0, 2))
+    const show = visible.length ? visible : outcomes.slice(0, 2);
+    outcomesHtml = show
       .map((o) => {
         const p = o.op?.[0];
         const pct = p != null ? Math.round(p * 100) + "%" : "–";
         const label = o.l || shortenQuestion(o.q, r.q);
         return `<span class="outcome">${esc(label)} <b>${pct}</b></span>`;
       })
-      .join("");
+      .join('<span class="outcome-sep">·</span>');
   }
 
   const meta = buildMeta(r);
