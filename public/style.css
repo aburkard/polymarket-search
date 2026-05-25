@@ -12,8 +12,8 @@
   --border-focus: #a1a1aa;
   --text: #18181b;
   --text-secondary: #52525b;
-  --text-muted: #a1a1aa;
-  --green: #16a34a;
+  --text-muted: #6e6e76;
+  --green: #15803d;
   --green-muted: #86efac;
   --red: #b91c1c;
   --red-muted: #fca5a5;
@@ -39,7 +39,7 @@
     --border-focus: #52525b;
     --text: #fafafa;
     --text-secondary: #a1a1aa;
-    --text-muted: #71717a;
+    --text-muted: #8a8a93;
     --green: #4ade80;
     --green-muted: #166534;
     --red: #f87171;
