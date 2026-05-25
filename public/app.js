@@ -245,7 +245,7 @@ function renderSportCard(r, url) {
         <span class="team-name">${esc(away.n)}</span>
         <span class="team-record">${esc(away.r)}</span>
       </div>
-      <span class="sport-cell">${awayPct != null ? `${awayPct}%` : ""}</span>
+      <span class="sport-cell is-ml">${awayPct != null ? `${awayPct}%` : ""}</span>
       ${hasProps ? `<span class="sport-cell">${esc(awaySpread)}</span>` : ""}
       ${hasProps ? `<span class="sport-cell">${totalNum ? `O ${esc(totalNum)}` : ""}</span>` : ""}
 
@@ -254,7 +254,7 @@ function renderSportCard(r, url) {
         <span class="team-name">${esc(home.n)}</span>
         <span class="team-record">${esc(home.r)}</span>
       </div>
-      <span class="sport-cell">${homePct != null ? `${homePct}%` : ""}</span>
+      <span class="sport-cell is-ml">${homePct != null ? `${homePct}%` : ""}</span>
       ${hasProps ? `<span class="sport-cell">${esc(homeSpread)}</span>` : ""}
       ${hasProps ? `<span class="sport-cell">${totalNum ? `U ${esc(totalNum)}` : ""}</span>` : ""}
     </div>

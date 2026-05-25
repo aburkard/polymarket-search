@@ -337,8 +337,7 @@ h1 {
   padding: 4px 2px;
 }
 
-.sport-grid > .sport-cell:nth-child(2),
-.sport-grid > .sport-cell:nth-child(6) {
+.sport-cell.is-ml {
   font-weight: 600;
   color: var(--green);
   background: none;
