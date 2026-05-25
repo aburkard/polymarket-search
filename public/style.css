@@ -264,6 +264,7 @@ h1 {
 
 .yes-no .yes { color: var(--green); }
 .yes-no .no { color: var(--red); }
+.yes-no .dim { color: var(--text-muted); }
 
 .prob-bar {
   width: 48px;

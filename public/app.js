@@ -114,10 +114,11 @@ function renderCard(r) {
     const p = outcomes[0].op?.[0];
     const pct = p != null ? Math.round(p * 100) : null;
     if (pct != null) {
+      const yesLeads = pct >= 50;
       outcomesHtml = `
         <div class="yes-no">
-          <span class="yes">${pct}% Yes</span>
-          <span class="no">${100 - pct}% No</span>
+          <span class="${yesLeads ? "yes" : "dim"}">${pct}% Yes</span>
+          <span class="${yesLeads ? "dim" : "no"}">${100 - pct}% No</span>
         </div>`;
     }
   } else if (outcomes.length > 1) {
