@@ -118,7 +118,33 @@ function expandQuery(terms) {
   return { expanded, termOrigin };
 }
 
+function unpackPostings(packed) {
+  if (typeof packed === "string") {
+    const result = [];
+    let prev = 0;
+    for (const part of packed.split(",")) {
+      if (!part) continue;
+      const colon = part.indexOf(":");
+      if (colon === -1) {
+        prev += parseInt(part, 10);
+        result.push([prev, 1]);
+      } else {
+        prev += parseInt(part.slice(0, colon), 10);
+        result.push([prev, parseInt(part.slice(colon + 1), 10)]);
+      }
+    }
+    return result;
+  }
+  return packed;
+}
+
 export function prepareIndex(data) {
+  for (const tier of ["idx", "ctx"]) {
+    if (!data[tier]) continue;
+    for (const term of Object.keys(data[tier])) {
+      data[tier][term] = unpackPostings(data[tier][term]);
+    }
+  }
   data._vocab = Object.keys(data.idx);
   data._ctxVocab = data.ctx ? Object.keys(data.ctx) : [];
   return data;

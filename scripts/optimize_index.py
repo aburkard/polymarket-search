@@ -54,6 +54,24 @@ def optimize():
     # Reduce IDF precision
     data["idf"] = {k: round(v, 2) for k, v in data["idf"].items()}
 
+    # Delta-encode and pack postings as strings
+    for tier in ("idx", "ctx"):
+        if tier not in data:
+            continue
+        packed = {}
+        for term, postings in data[tier].items():
+            parts = []
+            prev = 0
+            for doc_idx, tf in postings:
+                delta = doc_idx - prev
+                prev = doc_idx
+                if tf == 1:
+                    parts.append(str(delta))
+                else:
+                    parts.append(f"{delta}:{tf}")
+            packed[term] = ",".join(parts)
+        data[tier] = packed
+
     # Drop metadata
     data.pop("_n_enriched", None)
 
