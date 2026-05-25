@@ -3,3 +3,5 @@ data/
 .next/
 .env*
 *.db
+__pycache__/
+public/search-data.json

@@ -105,24 +105,45 @@ h1 {
   line-height: 1.35;
 }
 
+.result-outcomes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.result-outcomes .price {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.result-outcomes .price.yes {
+  color: #4caf50;
+}
+
+.result-outcomes .price.no {
+  color: #f44336;
+}
+
+.outcome {
+  font-size: 0.8rem;
+  color: #aaa;
+  background: #222;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.outcome b {
+  color: #4caf50;
+  font-weight: 600;
+}
+
 .result-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  font-size: 0.8rem;
-  color: #888;
-}
-
-.price {
-  font-weight: 600;
-}
-
-.price.yes {
-  color: #4caf50;
-}
-
-.price.no {
-  color: #f44336;
+  font-size: 0.75rem;
+  color: #666;
 }
 
 .vol {
@@ -130,7 +151,11 @@ h1 {
 }
 
 .end-date {
-  color: #666;
+  color: #555;
+}
+
+.more-markets {
+  color: #555;
 }
 
 .no-results {

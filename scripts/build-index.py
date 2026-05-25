@@ -99,6 +99,7 @@ def build_index(events: list[dict]) -> dict:
             for t in (ev.get("tags") or [])
         )
 
+        active_markets = []
         for m in ev.get("markets") or []:
             if m.get("closed"):
                 continue
@@ -106,30 +107,51 @@ def build_index(events: list[dict]) -> dict:
             vol24 = float(m.get("volume24hr") or 0)
             if vol == 0 and vol24 == 0:
                 continue
+            active_markets.append(m)
 
-            doc_idx = len(docs)
+        if not active_markets:
+            continue
 
-            question = m.get("question", "")
-            text = f"{question} {event_title} {tag_labels}"
-            terms = set(tokenize(text))
+        doc_idx = len(docs)
 
-            for t in terms:
-                if t not in idx:
-                    idx[t] = []
-                idx[t].append(doc_idx)
-                df[t] = df.get(t, 0) + 1
+        market_questions = " ".join(m.get("question", "") for m in active_markets)
+        text = f"{event_title} {market_questions} {tag_labels}"
+        terms = set(tokenize(text))
 
-            docs.append({
-                "q": question,
-                "s": m.get("slug", ""),
-                "es": event_slug,
-                "ed": (m.get("endDate") or "")[:10],
-                "im": m.get("image", ""),
+        for t in terms:
+            if t not in idx:
+                idx[t] = []
+            idx[t].append(doc_idx)
+            df[t] = df.get(t, 0) + 1
+
+        total_vol24 = sum(float(m.get("volume24hr") or 0) for m in active_markets)
+        total_vol = sum(float(m.get("volume") or 0) for m in active_markets)
+
+        top_markets = sorted(
+            active_markets,
+            key=lambda m: float(m.get("volume24hr") or 0),
+            reverse=True,
+        )[:5]
+
+        outcomes = []
+        for m in top_markets:
+            outcomes.append({
+                "q": m.get("question", ""),
                 "op": parse_outcome_prices(m.get("outcomePrices")),
-                "v": round(vol24),
-                "vt": round(vol),
-                "tg": tag_labels[:100],
+                "v": round(float(m.get("volume24hr") or 0)),
             })
+
+        docs.append({
+            "q": event_title,
+            "s": event_slug,
+            "ed": (ev.get("endDate") or "")[:10],
+            "im": ev.get("image", ""),
+            "v": round(total_vol24),
+            "vt": round(total_vol),
+            "tg": tag_labels[:100],
+            "mc": len(active_markets),
+            "mk": outcomes,
+        })
 
     n = len(docs)
     idf = {}

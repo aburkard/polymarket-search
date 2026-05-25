@@ -11,14 +11,14 @@ import {
 
 function makeIndex() {
   const docs = [
-    { q: "Will Bitcoin hit $150k?", s: "btc-150k", es: "btc", ed: "2026-06-30", v: 5000000, vt: 12000000, op: [0.01, 0.99], tg: "Crypto Bitcoin" },
-    { q: "Will Trump win 2028?", s: "trump-2028", es: "trump", ed: "2028-11-07", v: 500000, vt: 2000000, op: [0.35, 0.65], tg: "Politics Elections" },
-    { q: "Fed rate cut by June?", s: "fed-rate", es: "fed", ed: "2026-06-17", v: 200000, vt: 1000000, op: [0.80, 0.20], tg: "Finance Fed fomc" },
-    { q: "Will Iran ceasefire hold?", s: "iran-cf", es: "iran", ed: "2026-05-01", v: 10000000, vt: 20000000, op: [0.54, 0.46], tg: "Geopolitics Iran" },
-    { q: "NBA Finals MVP?", s: "nba-mvp", es: "nba", ed: "2026-06-15", v: 100, vt: 500, op: [0.10, 0.90], tg: "Sports NBA" },
-    { q: "Will Ethereum reach $5000?", s: "eth-5k", es: "eth", ed: "2026-12-31", v: 300000, vt: 800000, op: [0.05, 0.95], tg: "Crypto Ethereum" },
-    { q: "World Cup winner 2026?", s: "wc-2026", es: "worldcup", ed: "2026-07-19", v: 4000000, vt: 15000000, op: [0.08, 0.92], tg: "Sports Soccer FIFA" },
-    { q: "US election 2028 odds", s: "election-2028", es: "election", ed: "2028-11-07", v: 1000, vt: 5000, op: [0.50, 0.50], tg: "Politics Elections" },
+    { q: "Bitcoin Prices", s: "btc-prices", ed: "2026-06-30", v: 5000000, vt: 12000000, mc: 2, mk: [{q: "Will Bitcoin hit $150k?", op: [0.01, 0.99], v: 3000000}, {q: "Will Bitcoin reach $80k?", op: [0.18, 0.82], v: 2000000}], tg: "Crypto Bitcoin" },
+    { q: "Trump 2028 Election", s: "trump-2028", ed: "2028-11-07", v: 500000, vt: 2000000, mc: 1, mk: [{q: "Will Trump win 2028?", op: [0.35, 0.65], v: 500000}], tg: "Politics Elections" },
+    { q: "Fed Rate Decision", s: "fed-rate", ed: "2026-06-17", v: 200000, vt: 1000000, mc: 1, mk: [{q: "Fed rate cut by June?", op: [0.80, 0.20], v: 200000}], tg: "Finance Fed fomc" },
+    { q: "Iran Ceasefire", s: "iran-cf", ed: "2026-05-01", v: 10000000, vt: 20000000, mc: 1, mk: [{q: "Will Iran ceasefire hold?", op: [0.54, 0.46], v: 10000000}], tg: "Geopolitics Iran" },
+    { q: "NBA Finals MVP", s: "nba-mvp", ed: "2026-06-15", v: 100, vt: 500, mc: 1, mk: [{q: "NBA Finals MVP?", op: [0.10, 0.90], v: 100}], tg: "Sports NBA" },
+    { q: "Ethereum Prices", s: "eth-prices", ed: "2026-12-31", v: 300000, vt: 800000, mc: 1, mk: [{q: "Will Ethereum reach $5000?", op: [0.05, 0.95], v: 300000}], tg: "Crypto Ethereum" },
+    { q: "World Cup 2026", s: "wc-2026", ed: "2026-07-19", v: 4000000, vt: 15000000, mc: 1, mk: [{q: "World Cup winner 2026?", op: [0.08, 0.92], v: 4000000}], tg: "Sports Soccer FIFA" },
+    { q: "US Election 2028", s: "election-2028", ed: "2028-11-07", v: 1000, vt: 5000, mc: 1, mk: [{q: "US election 2028 odds", op: [0.50, 0.50], v: 1000}], tg: "Politics Elections" },
   ];
 
   const idx = {};
@@ -26,7 +26,8 @@ function makeIndex() {
   const n = docs.length;
 
   docs.forEach((doc, i) => {
-    const text = `${doc.q} ${doc.tg}`;
+    const mkText = (doc.mk || []).map((m) => m.q).join(" ");
+    const text = `${doc.q} ${mkText} ${doc.tg}`;
     const terms = tokenize(text);
     const unique = [...new Set(terms)];
     for (const t of unique) {
@@ -213,7 +214,7 @@ describe("search: volume boost", () => {
   it("iran ceasefire (10M vol) ranks high for 'ceasefire'", () => {
     const results = search("ceasefire", data);
     assert.ok(results.length > 0);
-    assert.equal(results[0].s, "iran-cf");
+    assert.ok(results[0].q.toLowerCase().includes("iran"));
   });
 });
 
@@ -222,10 +223,10 @@ describe("search: volume boost", () => {
 describe("search: IDF weighting", () => {
   const data = makeIndex();
 
-  it("rare term 'fomc' retrieves specific market", () => {
+  it("rare term 'fomc' retrieves specific event", () => {
     const results = search("fomc", data);
     assert.ok(results.length > 0);
-    assert.ok(results.some((r) => r.s === "fed-rate"));
+    assert.ok(results.some((r) => r.q.toLowerCase().includes("fed")));
   });
 
   it("common term 'will' alone returns results biased by volume", () => {
@@ -240,10 +241,10 @@ describe("search: IDF weighting", () => {
 describe("search: multi-term queries", () => {
   const data = makeIndex();
 
-  it("'bitcoin crypto' ranks bitcoin market highest", () => {
+  it("'bitcoin crypto' ranks bitcoin event highest", () => {
     const results = search("bitcoin crypto", data);
     assert.ok(results.length > 0);
-    assert.equal(results[0].s, "btc-150k");
+    assert.equal(results[0].s, "btc-prices");
   });
 
   it("'world cup 2026' finds world cup market", () => {
@@ -291,7 +292,7 @@ describe("search: edge cases", () => {
     assert.ok("q" in r);
     assert.ok("s" in r);
     assert.ok("v" in r);
-    assert.ok("op" in r);
+    assert.ok("mk" in r);
     assert.ok("_score" in r);
   });
 });

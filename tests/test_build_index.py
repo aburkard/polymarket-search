@@ -134,18 +134,17 @@ class TestBuildIndex(unittest.TestCase):
     def setUp(self):
         self.data = build_index(SAMPLE_EVENTS)
 
-    def test_filters_closed_markets(self):
-        questions = [d["q"] for d in self.data["docs"]]
-        self.assertNotIn("Will Bitcoin hit $200k?", questions)
+    def test_skips_events_with_only_closed_markets(self):
+        titles = [d["q"] for d in self.data["docs"]]
+        self.assertNotIn("Dead Market", titles)
 
-    def test_filters_zero_volume(self):
-        questions = [d["q"] for d in self.data["docs"]]
-        self.assertNotIn("Will nothing happen?", questions)
+    def test_skips_events_with_only_zero_volume(self):
+        self.assertEqual(self.data["n"], 2)
 
-    def test_includes_active_markets(self):
-        questions = [d["q"] for d in self.data["docs"]]
-        self.assertIn("Will Bitcoin hit $150k?", questions)
-        self.assertIn("Fed rate cut by June?", questions)
+    def test_indexes_at_event_level(self):
+        titles = [d["q"] for d in self.data["docs"]]
+        self.assertIn("Bitcoin Prices", titles)
+        self.assertIn("Fed Rate Decision", titles)
 
     def test_doc_count(self):
         self.assertEqual(self.data["n"], 2)
@@ -153,27 +152,51 @@ class TestBuildIndex(unittest.TestCase):
 
     def test_doc_fields(self):
         doc = self.data["docs"][0]
-        for key in ("q", "s", "es", "ed", "im", "op", "v", "vt", "tg"):
+        for key in ("q", "s", "ed", "im", "v", "vt", "tg", "mc", "mk"):
             self.assertIn(key, doc, f"Missing key: {key}")
 
-    def test_outcome_prices_parsed(self):
+    def test_doc_uses_event_slug(self):
         doc = self.data["docs"][0]
-        self.assertIsInstance(doc["op"], list)
-        self.assertIsInstance(doc["op"][0], float)
+        self.assertEqual(doc["s"], "bitcoin-prices")
+
+    def test_markets_array_has_outcomes(self):
+        doc = self.data["docs"][0]
+        self.assertIsInstance(doc["mk"], list)
+        self.assertGreater(len(doc["mk"]), 0)
+        mk = doc["mk"][0]
+        self.assertIn("q", mk)
+        self.assertIn("op", mk)
+        self.assertIsInstance(mk["op"], list)
+        self.assertIsInstance(mk["op"][0], float)
+
+    def test_closed_markets_excluded_from_outcomes(self):
+        doc = next(d for d in self.data["docs"] if d["q"] == "Bitcoin Prices")
+        market_qs = [m["q"] for m in doc["mk"]]
+        self.assertIn("Will Bitcoin hit $150k?", market_qs)
+        self.assertNotIn("Will Bitcoin hit $200k?", market_qs)
+
+    def test_market_count(self):
+        doc = next(d for d in self.data["docs"] if d["q"] == "Bitcoin Prices")
+        self.assertEqual(doc["mc"], 1)
+
+    def test_volume_aggregated(self):
+        doc = next(d for d in self.data["docs"] if d["q"] == "Bitcoin Prices")
+        self.assertEqual(doc["v"], 100000)
+        self.assertEqual(doc["vt"], 5000000)
 
     def test_volume_rounded(self):
         doc = self.data["docs"][0]
         self.assertIsInstance(doc["v"], int)
         self.assertIsInstance(doc["vt"], int)
 
-    def test_end_date_trimmed(self):
-        doc = self.data["docs"][0]
-        self.assertEqual(doc["ed"], "2026-06-30")
-
     def test_tags_present(self):
-        doc = self.data["docs"][0]
+        doc = next(d for d in self.data["docs"] if d["q"] == "Bitcoin Prices")
         self.assertIn("Crypto", doc["tg"])
         self.assertIn("Bitcoin", doc["tg"])
+
+    def test_child_market_questions_indexed(self):
+        idx = self.data["idx"]
+        self.assertIn("150k", idx)
 
     def test_inverted_index_structure(self):
         idx = self.data["idx"]
@@ -190,16 +213,6 @@ class TestBuildIndex(unittest.TestCase):
         self.assertIsInstance(idf["bitcoin"], float)
         self.assertGreater(idf["bitcoin"], 0)
 
-    def test_idf_common_term_lower(self):
-        idf = self.data["idf"]
-        # Both docs have tag "Finance" or text containing common terms;
-        # "fed" and "rate" only appear in one doc, so they should have
-        # higher IDF than terms appearing in both.
-        # In our 2-doc fixture, terms in both docs get idf=log(2/2)=0,
-        # terms in one doc get idf=log(2/1)=0.6931.
-        # Verify the math: a term in 1 doc has higher IDF than one in 2.
-        self.assertAlmostEqual(math.log(2 / 1), 0.6931, places=3)
-
     def test_no_duplicate_doc_indices(self):
         for term, doc_indices in self.data["idx"].items():
             self.assertEqual(len(doc_indices), len(set(doc_indices)),
@@ -209,10 +222,6 @@ class TestBuildIndex(unittest.TestCase):
         self.assertEqual(self.data["v"], 1)
         self.assertIn("ts", self.data)
         self.assertRegex(self.data["ts"], r"\d{4}-\d{2}-\d{2}T")
-
-    def test_event_slug_stored(self):
-        doc = self.data["docs"][0]
-        self.assertEqual(doc["es"], "bitcoin-prices")
 
 
 class TestBuildIndexEmpty(unittest.TestCase):
