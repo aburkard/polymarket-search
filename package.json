@@ -1,0 +1,12 @@
+{
+  "name": "polymarket-search",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/search.test.js",
+    "test:python": "python3 -m unittest tests.test_build_index -v",
+    "build": "python3 scripts/build-index.py",
+    "build:local": "python3 scripts/build-index.py --local data/events_active.jsonl",
+    "serve": "python3 -m http.server -d public 3000"
+  }
+}
