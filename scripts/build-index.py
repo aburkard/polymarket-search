@@ -160,12 +160,26 @@ STOP_WORDS = {
 }
 
 
+def load_enrichments() -> dict[str, list[str]]:
+    path = Path(__file__).parent.parent / "data" / "enrichments.jsonl"
+    enrichments: dict[str, list[str]] = {}
+    if path.exists():
+        for line in path.read_text().splitlines():
+            if not line.strip():
+                continue
+            entry = json.loads(line)
+            enrichments[entry["slug"]] = entry["aliases"]
+    return enrichments
+
+
 def build_index(events: list[dict]) -> dict:
     docs = []
     idx: dict[str, list] = {}
     ctx: dict[str, list] = {}
     df: dict[str, int] = {}
     doc_lens: list[int] = []
+    enrichments = load_enrichments()
+    n_enriched = 0
 
     for ev in events:
         event_title = ev.get("title", "")
@@ -208,6 +222,15 @@ def build_index(events: list[dict]) -> dict:
         for t in context_tokens:
             if t in context_terms:
                 ctx_tf[t] = ctx_tf.get(t, 0) + 1
+
+        llm_aliases = enrichments.get(event_slug, [])
+        if llm_aliases:
+            n_enriched += 1
+        for alias in llm_aliases:
+            for t in tokenize(alias):
+                if t not in base_terms:
+                    context_terms.add(t)
+                    ctx_tf[t] = ctx_tf.get(t, 0) + 1
 
         for t in base_terms:
             if t not in idx:
@@ -278,7 +301,7 @@ def build_index(events: list[dict]) -> dict:
     for term, freq in df.items():
         idf[term] = round(math.log((n - freq + 0.5) / (freq + 0.5) + 1), 4)
 
-    return {
+    result = {
         "v": 3,
         "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "n": n,
@@ -289,6 +312,8 @@ def build_index(events: list[dict]) -> dict:
         "ctx": ctx,
         "docs": docs,
     }
+    result["_n_enriched"] = n_enriched
+    return result
 
 
 def main():
@@ -310,7 +335,7 @@ def main():
     print(f"  Total events: {len(events)}")
 
     data = build_index(events)
-    print(f"  Indexed: {data['n']} markets, {len(data['idf'])} unique terms")
+    print(f"  Indexed: {data['n']} events, {len(data['idf'])} unique terms, {data.get('_n_enriched', 0)} enriched")
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     raw = json.dumps(data, separators=(",", ":"))
