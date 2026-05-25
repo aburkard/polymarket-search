@@ -248,7 +248,7 @@ h1 {
 
 .outcome-row.is-no .outcome-pct { color: var(--red); }
 
-.outcome-row.is-temporal .outcome-pct { color: var(--text-muted); }
+.outcome-row.is-temporal .outcome-pct { color: var(--text-muted); font-weight: 500; }
 
 .outcome-more {
   font-size: 0.75rem;
