@@ -125,16 +125,22 @@ function renderCard(r) {
     : '<div class="result-img placeholder"></div>';
 
   const outcomes = (r.mk || []).slice(0, 5);
-  let outcomesHtml = "";
+  let rowsHtml = "";
 
   if (outcomes.length === 1) {
     const p = outcomes[0].op?.[0];
     const pct = p != null ? Math.round(p * 100) : null;
     if (pct != null) {
       const yesLeads = pct >= 50;
-      outcomesHtml = `
-        <span class="outcome ${yesLeads ? "outcome-yes" : "outcome-dim"}">Yes <b>${pct}%</b></span>
-        <span class="outcome ${yesLeads ? "outcome-dim" : "outcome-no"}">No <b>${100 - pct}%</b></span>`;
+      rowsHtml = `
+        <div class="outcome-row ${yesLeads ? "" : "is-dim"}">
+          <span class="outcome-label">Yes</span>
+          <span class="outcome-pct">${pct}%</span>
+        </div>
+        <div class="outcome-row ${yesLeads ? "is-dim is-no" : "is-no"}">
+          <span class="outcome-label">No</span>
+          <span class="outcome-pct">${100 - pct}%</span>
+        </div>`;
     }
   } else if (outcomes.length > 1) {
     const visible = outcomes.filter((o) => {
@@ -142,27 +148,34 @@ function renderCard(r) {
       return p != null && Math.round(p * 100) >= 1;
     });
     const show = (visible.length ? visible : outcomes.slice(0, 2)).slice(0, 3);
-    outcomesHtml = show
+    rowsHtml = show
       .map((o, i) => {
         const p = o.op?.[0];
         const pct = p != null ? Math.round(p * 100) + "%" : "–";
         const label = o.l || shortenQuestion(o.q, r.q);
-        const cls = i === 0 ? "outcome outcome-lead" : "outcome outcome-rest";
-        return `<span class="${cls}">${esc(label)} <b>${pct}</b></span>`;
+        return `
+        <div class="outcome-row${i > 0 ? " is-dim" : ""}">
+          <span class="outcome-label">${esc(label)}</span>
+          <span class="outcome-pct">${pct}</span>
+        </div>`;
       })
       .join("");
+    const remaining = r.mc - Math.min((r.mk || []).length, 3);
+    if (remaining > 0) {
+      rowsHtml += `<div class="outcome-more">+${remaining} more</div>`;
+    }
   }
 
   const meta = buildMeta(r);
 
   return `
   <a href="${url}" target="_blank" rel="noopener" class="result" role="listitem" tabindex="0">
-    ${img}
-    <div class="result-body">
+    <div class="result-header">
+      ${img}
       <div class="result-question">${esc(r.q)}</div>
-      ${outcomesHtml ? `<div class="result-outcomes">${outcomesHtml}</div>` : ""}
-      <div class="result-meta">${meta}</div>
     </div>
+    ${rowsHtml ? `<div class="outcome-rows">${rowsHtml}</div>` : ""}
+    <div class="result-meta">${meta}</div>
   </a>`;
 }
 
