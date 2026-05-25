@@ -20,37 +20,168 @@ const data = prepareIndex(
 // ── Eval set: [query, regex pattern that should match, notes] ──────────
 
 const EVALS = [
-  ["ca-38", /CA-38/i, "district match over TX-38"],
-  ["ossoff", /georgia.*senate|ossoff/i, "GA senate race"],
-  ["trump die", /trump.*out.*president|trump.*leave|assassination/i, "trump leaving office"],
-  ["minnesota senate", /minnesota.*(senate|democratic.*senate|republican.*senate)/i, "MN senate"],
-  ["musk", /musk|elon/i, "Elon Musk events"],
-  ["wemby", /wemb/i, "Wembanyama"],
-  ["aoc", /ocasio|ny-14|democratic.*nomin/i, "AOC / her district"],
-  ["bitcoin price", /bitcoin/i, "bitcoin price events"],
-  ["fomc", /fed.*decision|fed.*rate|fomc/i, "fed rate decisions"],
-  ["democratic presidential nominee", /democratic.*nomin/i, "dem nominee 2028"],
-  ["etherium", /ethereum/i, "ethereum (misspelled)"],
-  ["world cup winner", /fifa.*world.*cup|world.*cup.*winner/i, "FIFA WC"],
-  ["interest rates", /fed.*decision|fed.*rate|interest.*rate/i, "interest rate events"],
-  ["nba finals", /nba.*champion|nba.*final/i, "NBA championship"],
-  ["fed rate cut", /fed.*rate.*cut|fed.*rate|fed.*decision/i, "fed rate cut"],
-  ["spurs thunder", /thunder.*spurs|spurs.*thunder|okc.*sas|sas.*okc/i, "tonight's game"],
-  ["btc", /bitcoin|btc/i, "bitcoin via abbreviation"],
-  ["eth", /ethereum|eth/i, "ethereum via abbreviation"],
-  ["cpi", /inflation|cpi|consumer.*price/i, "inflation/CPI"],
-  ["2026", /2026/i, "2026-specific events"],
-  ["trmup", /trump/i, "trump (mangled spelling)"],
-  ["ceaseifre", /ceasefire/i, "ceasefire (misspelled)"],
-  ["bitconi", /bitcoin/i, "bitcoin (misspelled)"],
-  ["fed ra", /fed.*rate|fed.*decision/i, "fed rate (partial)"],
-  ["world cu", /world.*cup|fifa/i, "world cup (partial)"],
+  // ── Clean, specific queries ──────────────────────────────────────────
+  ["bitcoin price", /bitcoin/i, "clean:crypto"],
+  ["ethereum price", /ethereum/i, "clean:crypto"],
+  ["solana price", /solana/i, "clean:crypto"],
+  ["fed rate cut", /fed.*rate|fed.*decision/i, "clean:finance"],
+  ["interest rates", /fed.*decision|fed.*rate|interest.*rate/i, "clean:finance"],
+  ["world cup winner", /fifa.*world.*cup|world.*cup/i, "clean:sports"],
+  ["nba finals", /nba.*champion|nba.*final/i, "clean:sports"],
+  ["stanley cup", /stanley.*cup|nhl/i, "clean:sports"],
+  ["champions league", /champions.*league|uefa/i, "clean:sports"],
+  ["premier league", /premier.*league/i, "clean:sports"],
+  ["democratic presidential nominee", /democratic.*nomin/i, "clean:politics"],
+  ["republican presidential nominee", /republican.*nomin/i, "clean:politics"],
+  ["trump tariffs", /trump.*tariff/i, "clean:politics"],
+  ["iran ceasefire", /iran.*ceasefire|ceasefire.*iran/i, "clean:geopolitics"],
+  ["ukraine russia peace", /ukraine|russia/i, "clean:geopolitics"],
+  ["china taiwan", /china.*taiwan|taiwan/i, "clean:geopolitics"],
+  ["spacex starship", /spacex.*starship|starship/i, "clean:science"],
+  ["ai safety bill", /ai.*safety/i, "clean:science"],
+  ["taylor swift", /taylor.*swift/i, "clean:culture"],
+  ["gta 6", /gta/i, "clean:culture"],
+  ["james bond", /james.*bond|bond.*actor/i, "clean:culture"],
+  ["minnesota senate", /minnesota.*(senate|democratic.*senate|republican.*senate)/i, "clean:politics"],
+  ["ca-38", /CA-38/i, "clean:politics"],
+  ["openai ipo", /openai.*ipo/i, "clean:finance"],
+  ["kraken ipo", /kraken/i, "clean:crypto"],
+
+  // ── Multi-word specific ──────────────────────────────────────────────
+  ["will bitcoin hit 100k", /bitcoin/i, "multiword:crypto"],
+  ["trump out as president", /trump.*out.*president|trump.*leave/i, "multiword:politics"],
+  ["who will win world cup", /world.*cup|fifa/i, "multiword:sports"],
+  ["next james bond actor", /james.*bond|bond/i, "multiword:culture"],
+  ["spacex launch this week", /spacex/i, "multiword:science"],
+  ["fed meeting this month", /fed.*decision|fed.*meeting|fomc/i, "multiword:finance"],
+
+  // ── Abbreviations / jargon ───────────────────────────────────────────
+  ["btc", /bitcoin|btc/i, "abbrev:crypto"],
+  ["eth", /ethereum|eth/i, "abbrev:crypto"],
+  ["sol", /solana|sol/i, "abbrev:crypto"],
+  ["xrp", /xrp|ripple/i, "abbrev:crypto"],
+  ["fomc", /fed.*decision|fed.*rate|fomc/i, "abbrev:finance"],
+  ["cpi", /inflation|cpi|consumer.*price/i, "abbrev:finance"],
+  ["gdp", /gdp|growth/i, "abbrev:finance"],
+  ["aoc", /ocasio|ny-14|democratic.*nomin/i, "abbrev:politics"],
+  ["potus", /president|trump|white.*house/i, "abbrev:politics"],
+  ["scotus", /scotus|supreme.*court/i, "abbrev:politics"],
+  ["epl", /premier.*league/i, "abbrev:sports"],
+  ["nfl", /nfl|football.*champion/i, "abbrev:sports"],
+  ["ufc", /ufc|mma/i, "abbrev:sports"],
+  ["ipo", /ipo/i, "abbrev:finance"],
+
+  // ── Nicknames / alternate names ──────────────────────────────────────
+  ["musk", /musk|elon/i, "nickname"],
+  ["wemby", /wemb/i, "nickname"],
+  ["sga", /gilgeous|thunder|okc/i, "nickname:sports"],
+  ["macron", /macron|france.*president/i, "nickname:politics"],
+  ["starmer", /starmer/i, "nickname:politics"],
+
+  // ── Misspellings ─────────────────────────────────────────────────────
+  ["etherium", /ethereum/i, "misspell"],
+  ["trmup", /trump/i, "misspell"],
+  ["ceaseifre", /ceasefire/i, "misspell"],
+  ["bitconi", /bitcoin/i, "misspell"],
+  ["ukrane", /ukraine/i, "misspell"],
+  ["chamions league", /champions.*league/i, "misspell"],
+
+  // ── Partial / typing in progress ─────────────────────────────────────
+  ["fed ra", /fed.*rate|fed.*decision/i, "partial"],
+  ["world cu", /world.*cup|fifa/i, "partial"],
+  ["bitcoi", /bitcoin/i, "partial"],
+  ["trum", /trump/i, "partial"],
+  ["ethe", /ethereum/i, "partial"],
+  ["spacex star", /spacex.*starship|starship/i, "partial"],
+  ["taylor sw", /taylor.*swift/i, "partial"],
+  ["champions lea", /champions.*league/i, "partial"],
+
+  // ── Conceptual / indirect ────────────────────────────────────────────
+  ["trump die", /trump.*out.*president|trump.*leave|assassination/i, "conceptual"],
+  ["crypto crash", /bitcoin|crypto/i, "conceptual"],
+  ["stock market crash", /equit|stock|s.p|market.*crash/i, "conceptual"],
+  ["gas prices", /natural.*gas|oil|energy|gas/i, "conceptual"],
+  ["housing market", /hous|real.*estate|mortgage/i, "conceptual"],
+  ["will rates go up", /fed.*rate|interest.*rate|fed.*decision/i, "conceptual"],
+  ["robot future", /robot|humanoid|optimus/i, "conceptual"],
+  ["nuclear war", /nuclear|ww3|world.*war/i, "conceptual"],
+  ["recession", /recession|gdp|economy/i, "conceptual"],
+
+  // ── Year-specific ────────────────────────────────────────────────────
+  ["2026", /2026/i, "year"],
+  ["2028 election", /2028.*election|election.*2028|president.*2028/i, "year"],
+
+  // ── Sports-specific patterns ─────────────────────────────────────────
+  ["spurs thunder", /thunder.*spurs|spurs.*thunder|okc.*sas/i, "sports:game"],
+  ["lakers celtics", /laker|celtic/i, "sports:game"],
+  ["france brazil world cup", /france|brazil/i, "sports:matchup"],
+  ["nba mvp", /nba.*mvp|mvp/i, "sports:award"],
+  ["nfl draft", /draft|nfl/i, "sports:event"],
+  ["ballon dor", /ballon|golden.*ball/i, "sports:award"],
+
+  // ── Niche / long tail ────────────────────────────────────────────────
+  ["covid variant", /covid|variant/i, "niche:science"],
+  ["tiktok ban", /tiktok/i, "niche:tech"],
+  ["nato", /nato/i, "niche:geopolitics"],
+  ["harvey weinstein", /weinstein/i, "niche:culture"],
+  ["cs2 map pool", /cache|map.*pool|counter.*strike/i, "niche:esports"],
+  ["aaron rodgers retire", /rodgers|retire/i, "niche:sports"],
+  ["pump.fun airdrop", /pump/i, "niche:crypto"],
+
+  // ── Edge cases: punctuation & special chars ──────────────────────────
+  ["trump's tariffs", /trump.*tariff/i, "edge:punctuation"],
+  ["s&p 500", /s.p|equit|stock/i, "edge:punctuation"],
+  ["u.s. iran", /iran/i, "edge:punctuation"],
+  ["$80,000 bitcoin", /bitcoin/i, "edge:punctuation"],
+  ["50%+ chance", /./i, "edge:punctuation"],
+
+  // ── Edge cases: single character / very short ────────────────────────
+  ["a", null, "edge:tooShort (expect empty)"],
+  ["", null, "edge:empty (expect empty)"],
+  ["ai", /ai|artificial/i, "edge:short"],
+  ["uk", /uk|united.*kingdom|brit/i, "edge:short"],
+
+  // ── Edge cases: very long queries ────────────────────────────────────
+  ["will the federal reserve cut interest rates at the next fomc meeting", /fed.*rate|fed.*decision|fomc/i, "edge:longQuery"],
+  ["who is going to win the 2026 fifa world cup in north america", /fifa.*world.*cup|world.*cup/i, "edge:longQuery"],
+
+  // ── Edge cases: all caps / mixed case ────────────────────────────────
+  ["BITCOIN", /bitcoin/i, "edge:caps"],
+  ["TRUMP 2028", /trump.*2028|2028.*trump|republican.*nomin|president/i, "edge:caps"],
+  ["Bitcoin Price", /bitcoin/i, "edge:mixedCase"],
+
+  // ── Edge cases: numbers and prices ───────────────────────────────────
+  ["bitcoin 80000", /bitcoin/i, "edge:numbers"],
+  ["100k", /bitcoin|100k/i, "edge:numbers"],
+  ["3.5%", /inflation|rate|fed/i, "edge:numbers"],
+
+  // ── Edge cases: repeated/duplicate terms ─────────────────────────────
+  ["trump trump", /trump/i, "edge:repeated"],
+  ["bitcoin bitcoin price", /bitcoin/i, "edge:repeated"],
+
+  // ── Edge cases: stop-word-heavy ──────────────────────────────────────
+  ["will the", /./i, "edge:stopWords"],
+  ["what is the", /./i, "edge:stopWords"],
+  ["is there a", /./i, "edge:stopWords"],
+
+  // ── Edge cases: unicode / accents ────────────────────────────────────
+  ["macron président", /macron/i, "edge:unicode"],
+  ["são paulo", /brazil|paulo/i, "edge:unicode"],
+
+  // ── Edge cases: query IS the exact event title ───────────────────────
+  ["2026 NBA Champion", /nba.*champion/i, "edge:exactTitle"],
+  ["Fed decision in April?", /fed.*decision.*april/i, "edge:exactTitle"],
 ];
 
 // ── Scoring ─────────────────────────────────────────────────────────────
 
 function evalQuery(query, pattern, config, topK = 10) {
   const results = search(query, data, topK, config);
+  if (pattern === null) {
+    return results.length === 0
+      ? { rank: 1, hit: true, top: "(empty — correct)" }
+      : { rank: 0, hit: false, top: results[0]?.q };
+  }
   for (let i = 0; i < results.length; i++) {
     if (pattern.test(results[i].q)) {
       return { rank: i + 1, hit: true, top: results[0]?.q };
