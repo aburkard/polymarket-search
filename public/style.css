@@ -339,8 +339,10 @@ h1 {
 
 .sport-cell.is-ml {
   font-weight: 600;
+}
+
+.sport-cell.is-ml.is-fav {
   color: var(--green);
-  background: none;
 }
 
 .live-badge {
