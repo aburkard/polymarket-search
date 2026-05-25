@@ -162,9 +162,10 @@ STOP_WORDS = {
 
 def build_index(events: list[dict]) -> dict:
     docs = []
-    idx: dict[str, list[int]] = {}
-    ctx: dict[str, list[int]] = {}
+    idx: dict[str, list] = {}
+    ctx: dict[str, list] = {}
     df: dict[str, int] = {}
+    doc_lens: list[int] = []
 
     for ev in events:
         event_title = ev.get("title", "")
@@ -191,21 +192,33 @@ def build_index(events: list[dict]) -> dict:
 
         market_questions = " ".join(m.get("question", "") for m in active_markets)
         base_text = f"{event_title} {market_questions} {tag_labels}"
-        base_terms = set(tokenize(base_text))
+        base_tokens = tokenize(base_text)
+        base_terms = set(base_tokens)
+
+        base_tf: dict[str, int] = {}
+        for t in base_tokens:
+            base_tf[t] = base_tf.get(t, 0) + 1
+        doc_lens.append(len(base_tokens))
 
         context_raw = (ev.get("eventMetadata") or {}).get("context_description", "")
-        context_terms = set(tokenize(context_raw)) - base_terms - STOP_WORDS
+        context_tokens = tokenize(context_raw)
+        context_terms = set(context_tokens) - base_terms - STOP_WORDS
+
+        ctx_tf: dict[str, int] = {}
+        for t in context_tokens:
+            if t in context_terms:
+                ctx_tf[t] = ctx_tf.get(t, 0) + 1
 
         for t in base_terms:
             if t not in idx:
                 idx[t] = []
-            idx[t].append(doc_idx)
+            idx[t].append([doc_idx, base_tf[t]])
             df[t] = df.get(t, 0) + 1
 
         for t in context_terms:
             if t not in ctx:
                 ctx[t] = []
-            ctx[t].append(doc_idx)
+            ctx[t].append([doc_idx, ctx_tf.get(t, 1)])
             df[t] = df.get(t, 0) + 1
 
         total_vol24 = sum(float(m.get("volume24hr") or 0) for m in active_markets)
@@ -259,14 +272,18 @@ def build_index(events: list[dict]) -> dict:
         docs.append(doc)
 
     n = len(docs)
+    avg_dl = sum(doc_lens) / n if n else 0
+
     idf = {}
     for term, freq in df.items():
-        idf[term] = round(math.log(n / freq), 4)
+        idf[term] = round(math.log((n - freq + 0.5) / (freq + 0.5) + 1), 4)
 
     return {
-        "v": 2,
+        "v": 3,
         "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "n": n,
+        "avgDl": round(avg_dl, 2),
+        "dl": doc_lens,
         "idf": idf,
         "idx": idx,
         "ctx": ctx,

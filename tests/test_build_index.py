@@ -203,9 +203,19 @@ class TestBuildIndex(unittest.TestCase):
         self.assertIsInstance(idx, dict)
         self.assertIn("bitcoin", idx)
         self.assertIsInstance(idx["bitcoin"], list)
-        for doc_idx in idx["bitcoin"]:
+        for posting in idx["bitcoin"]:
+            self.assertIsInstance(posting, list)
+            self.assertEqual(len(posting), 2)
+            doc_idx, tf = posting
             self.assertIsInstance(doc_idx, int)
             self.assertLess(doc_idx, self.data["n"])
+            self.assertGreater(tf, 0)
+
+    def test_doc_lengths_stored(self):
+        self.assertIn("dl", self.data)
+        self.assertIn("avgDl", self.data)
+        self.assertEqual(len(self.data["dl"]), self.data["n"])
+        self.assertGreater(self.data["avgDl"], 0)
 
     def test_idf_computed(self):
         idf = self.data["idf"]
@@ -214,12 +224,13 @@ class TestBuildIndex(unittest.TestCase):
         self.assertGreater(idf["bitcoin"], 0)
 
     def test_no_duplicate_doc_indices(self):
-        for term, doc_indices in self.data["idx"].items():
-            self.assertEqual(len(doc_indices), len(set(doc_indices)),
+        for term, postings in self.data["idx"].items():
+            doc_ids = [p[0] for p in postings]
+            self.assertEqual(len(doc_ids), len(set(doc_ids)),
                              f"Duplicate doc indices for term '{term}'")
 
     def test_version_and_timestamp(self):
-        self.assertEqual(self.data["v"], 2)
+        self.assertEqual(self.data["v"], 3)
         self.assertIn("ts", self.data)
         self.assertRegex(self.data["ts"], r"\d{4}-\d{2}-\d{2}T")
 

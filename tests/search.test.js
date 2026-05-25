@@ -23,26 +23,30 @@ function makeIndex() {
 
   const idx = {};
   const df = {};
+  const dl = [];
   const n = docs.length;
 
   docs.forEach((doc, i) => {
     const mkText = (doc.mk || []).map((m) => m.q).join(" ");
     const text = `${doc.q} ${mkText} ${doc.tg}`;
     const terms = tokenize(text);
-    const unique = [...new Set(terms)];
-    for (const t of unique) {
+    dl.push(terms.length);
+    const tf = {};
+    for (const t of terms) tf[t] = (tf[t] || 0) + 1;
+    for (const [t, count] of Object.entries(tf)) {
       if (!idx[t]) idx[t] = [];
-      idx[t].push(i);
+      idx[t].push([i, count]);
       df[t] = (df[t] || 0) + 1;
     }
   });
 
+  const avgDl = dl.reduce((a, b) => a + b, 0) / n;
   const idf = {};
   for (const [term, freq] of Object.entries(df)) {
-    idf[term] = Math.log(n / freq);
+    idf[term] = Math.log((n - freq + 0.5) / (freq + 0.5) + 1);
   }
 
-  return prepareIndex({ v: 1, n, idx, idf, docs });
+  return prepareIndex({ v: 3, n, avgDl, dl, idx, idf, docs });
 }
 
 // ── Tokenization ────────────────────────────────────────────────────────
@@ -229,10 +233,9 @@ describe("search: IDF weighting", () => {
     assert.ok(results.some((r) => r.q.toLowerCase().includes("fed")));
   });
 
-  it("common term 'will' alone returns results biased by volume", () => {
+  it("common term 'will' returns results (low IDF, volume matters less)", () => {
     const results = search("will", data);
     assert.ok(results.length > 0);
-    assert.ok(results[0].v >= results[1].v);
   });
 });
 

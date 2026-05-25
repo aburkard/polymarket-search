@@ -1,3 +1,6 @@
+const K1 = 1.2;
+const B = 0.3;
+
 export function tokenize(text) {
   return text
     .toLowerCase()
@@ -39,16 +42,18 @@ export function search(query, data, limit = 20) {
   if (!terms.length) return [];
 
   const vocab = data._vocab || Object.keys(data.idx);
+  const ctxVocab = data._ctxVocab || [];
+  const ctxIdx = data.ctx || {};
+  const avgDl = data.avgDl || 1;
+  const dl = data.dl || [];
+
   const scores = new Map();
   const termHits = new Map();
 
-  const ctxVocab = data._ctxVocab || [];
-  const ctxIdx = data.ctx || {};
-
   for (const term of terms) {
-    const baseMatches = findMatches(term, data.idx, data.idf, vocab);
+    const baseMatches = findMatches(term, data.idx, data.idf, vocab, dl, avgDl);
     const ctxMatches = data.ctx
-      ? findMatches(term, ctxIdx, data.idf, ctxVocab)
+      ? findMatches(term, ctxIdx, data.idf, ctxVocab, dl, avgDl)
       : new Map();
 
     const merged = new Map(baseMatches);
@@ -77,7 +82,7 @@ export function search(query, data, limit = 20) {
     let yearBoost = 1;
     if (queryYears.length && doc.ed) {
       const docYear = doc.ed.slice(0, 4);
-      yearBoost = queryYears.includes(docYear) ? 2 : 0.3;
+      yearBoost = queryYears.includes(docYear) ? 3 : 0.1;
     }
 
     results.push({
@@ -91,23 +96,37 @@ export function search(query, data, limit = 20) {
   return results.slice(0, limit);
 }
 
-function findMatches(term, idx, idf, vocab) {
+function bm25Score(tf, idf, docLen, avgDl) {
+  const norm = 1 - B + B * (docLen / avgDl);
+  return idf * ((tf * (K1 + 1)) / (tf + K1 * norm));
+}
+
+function findMatches(term, idx, idf, vocab, dl, avgDl) {
   const seen = new Map();
 
   function add(docIdx, score) {
     seen.set(docIdx, Math.max(seen.get(docIdx) || 0, score));
   }
 
+  const termIdf = idf[term] || 0;
+
   if (idx[term]) {
-    const s = (idf[term] || 1) * 2;
-    for (const docIdx of idx[term]) add(docIdx, s);
+    for (const posting of idx[term]) {
+      const [docIdx, tf] = posting;
+      const docLen = dl[docIdx] || avgDl;
+      add(docIdx, bm25Score(tf, termIdf, docLen, avgDl));
+    }
   }
 
   for (const vt of vocab) {
     if (vt === term) continue;
     if (vt.startsWith(term)) {
-      const s = (idf[vt] || 1) * 0.8;
-      for (const docIdx of idx[vt]) add(docIdx, s);
+      const vtIdf = idf[vt] || 0;
+      for (const posting of idx[vt]) {
+        const [docIdx, tf] = posting;
+        const docLen = dl[docIdx] || avgDl;
+        add(docIdx, bm25Score(tf, vtIdf, docLen, avgDl) * 0.8);
+      }
     }
   }
 
@@ -119,8 +138,13 @@ function findMatches(term, idx, idf, vocab) {
       if (vt.slice(0, 2) !== term.slice(0, 2)) continue;
       const dist = levenshtein(term, vt);
       if (dist <= maxDist) {
-        const s = (idf[vt] || 1) * (1 - dist / term.length) * 0.6;
-        for (const docIdx of idx[vt]) add(docIdx, s);
+        const vtIdf = idf[vt] || 0;
+        const fuzzyDiscount = (1 - dist / term.length) * 0.6;
+        for (const posting of idx[vt]) {
+          const [docIdx, tf] = posting;
+          const docLen = dl[docIdx] || avgDl;
+          add(docIdx, bm25Score(tf, vtIdf, docLen, avgDl) * fuzzyDiscount);
+        }
       }
     }
   }
