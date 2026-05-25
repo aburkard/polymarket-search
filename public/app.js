@@ -45,6 +45,9 @@ function renderResults(results) {
       const vol = formatVolume(r.v);
       const endDate = r.ed || "";
       const url = `https://polymarket.com/event/${r.s}`;
+
+      if (r.tm) return renderSportsResult(r, url, vol);
+
       const img = r.im
         ? `<img src="${r.im}" alt="" class="result-img" loading="lazy">`
         : '<div class="result-img placeholder"></div>';
@@ -89,6 +92,58 @@ function renderResults(results) {
       </a>`;
     })
     .join("");
+}
+
+function renderSportsResult(r, url, vol) {
+  const away = r.tm[0] || {};
+  const home = r.tm[1] || {};
+
+  const moneyline = (r.mk || []).find((m) => {
+    const q = m.q.toLowerCase();
+    return !q.includes("spread") && !q.includes("o/u") && !q.includes(":") && !q.includes("odd/even") && !q.includes("team to");
+  });
+  const awayOdds = moneyline?.op?.[0];
+  const homeOdds = moneyline?.op?.[1];
+
+  const props = (r.mk || [])
+    .filter((m) => m !== moneyline)
+    .map((m) => {
+      const p = m.op?.[0];
+      const pct = p != null ? (p * 100).toFixed(0) + "¢" : "–";
+      const label = m.q.replace(r.q + ": ", "").replace(r.q.split(" vs. ").reverse().join(" vs. ") + ": ", "");
+      return `<span class="outcome">${escapeHtml(label)} <b>${pct}</b></span>`;
+    });
+
+  const liveHtml = r.live
+    ? `<span class="live-badge">LIVE ${escapeHtml(r.per || "")}</span><span class="score">${escapeHtml(r.sc || "")}</span>`
+    : "";
+
+  const dateStr = r.gd || r.ed || "";
+
+  return `
+    <a href="${url}" target="_blank" rel="noopener" class="result result-sport">
+      <div class="sport-matchup">
+        <div class="sport-team">
+          ${away.l ? `<img src="${away.l}" alt="" class="team-logo">` : ""}
+          <span class="team-name">${escapeHtml(away.n)}</span>
+          <span class="team-record">${escapeHtml(away.r)}</span>
+          ${awayOdds != null ? `<span class="team-odds">${(awayOdds * 100).toFixed(0)}¢</span>` : ""}
+        </div>
+        <div class="sport-team">
+          ${home.l ? `<img src="${home.l}" alt="" class="team-logo">` : ""}
+          <span class="team-name">${escapeHtml(home.n)}</span>
+          <span class="team-record">${escapeHtml(home.r)}</span>
+          ${homeOdds != null ? `<span class="team-odds">${(homeOdds * 100).toFixed(0)}¢</span>` : ""}
+        </div>
+      </div>
+      ${props.length ? `<div class="result-outcomes">${props.join("")}</div>` : ""}
+      <div class="result-meta">
+        ${liveHtml}
+        <span class="vol">$${vol} vol</span>
+        ${dateStr ? `<span class="end-date">${dateStr}</span>` : ""}
+        ${r.mc > (r.mk || []).length ? `<span class="more-markets">+${r.mc - (r.mk || []).length} more props</span>` : ""}
+      </div>
+    </a>`;
 }
 
 function shortenQuestion(marketQ, eventTitle) {

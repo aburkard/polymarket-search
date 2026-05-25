@@ -86,6 +86,45 @@ def parse_outcome_prices(raw: str | None) -> list[float]:
         return []
 
 
+def _outcome_tier(m: dict, event_title: str) -> int:
+    git = (m.get("groupItemTitle") or "").strip()
+    q = m.get("question", "")
+    if not git or git == event_title or q == event_title:
+        return 0  # moneyline
+    gl = git.lower()
+    if gl.startswith("spread") and "1h" not in gl:
+        return 1
+    if gl.startswith("o/u") and "1h" not in gl:
+        return 2
+    if gl.startswith("1h"):
+        return 3
+    if gl.startswith("team to"):
+        return 4
+    if ":" in gl:
+        return 6  # player props
+    return 5
+
+
+def pick_sports_outcomes(markets: list[dict], event_title: str) -> list[dict]:
+    tiered = sorted(markets, key=lambda m: (
+        _outcome_tier(m, event_title),
+        -float(m.get("volume24hr") or 0),
+    ))
+    seen_tiers: set[int] = set()
+    picked: list[dict] = []
+    for m in tiered:
+        tier = _outcome_tier(m, event_title)
+        if tier >= 6:
+            break
+        if tier in seen_tiers and len(picked) >= 3:
+            continue
+        seen_tiers.add(tier)
+        picked.append(m)
+        if len(picked) >= 4:
+            break
+    return picked
+
+
 def build_index(events: list[dict]) -> dict:
     docs = []
     idx: dict[str, list[int]] = {}
@@ -127,15 +166,16 @@ def build_index(events: list[dict]) -> dict:
         total_vol24 = sum(float(m.get("volume24hr") or 0) for m in active_markets)
         total_vol = sum(float(m.get("volume") or 0) for m in active_markets)
 
-        def market_sort_price(m):
-            prices = parse_outcome_prices(m.get("outcomePrices"))
-            return prices[0] if prices else 0
+        is_sports = bool(ev.get("sport") or ev.get("teams"))
 
-        top_markets = sorted(
-            active_markets,
-            key=market_sort_price,
-            reverse=True,
-        )[:5]
+        if is_sports:
+            top_markets = pick_sports_outcomes(active_markets, event_title)
+        else:
+            top_markets = sorted(
+                active_markets,
+                key=lambda m: (parse_outcome_prices(m.get("outcomePrices")) or [0])[0],
+                reverse=True,
+            )[:5]
 
         outcomes = []
         for m in top_markets:
@@ -145,7 +185,7 @@ def build_index(events: list[dict]) -> dict:
                 "v": round(float(m.get("volume24hr") or 0)),
             })
 
-        docs.append({
+        doc = {
             "q": event_title,
             "s": event_slug,
             "ed": (ev.get("endDate") or "")[:10],
@@ -155,7 +195,22 @@ def build_index(events: list[dict]) -> dict:
             "tg": tag_labels[:100],
             "mc": len(active_markets),
             "mk": outcomes,
-        })
+        }
+
+        if is_sports:
+            teams = ev.get("teams") or []
+            if teams:
+                doc["tm"] = [
+                    {"n": t.get("name", ""), "l": t.get("logo", ""), "r": t.get("record", "")}
+                    for t in teams[:2]
+                ]
+            doc["gd"] = ev.get("eventDate") or ""
+            if ev.get("live"):
+                doc["live"] = True
+                doc["sc"] = ev.get("score", "")
+                doc["per"] = ev.get("period", "")
+
+        docs.append(doc)
 
     n = len(docs)
     idf = {}

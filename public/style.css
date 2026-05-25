@@ -80,6 +80,66 @@ h1 {
   background: #222;
 }
 
+.result-sport {
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sport-matchup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sport-team {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.team-logo {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  object-fit: contain;
+}
+
+.team-name {
+  font-weight: 600;
+  color: #fff;
+  font-size: 0.95rem;
+  flex: 1;
+}
+
+.team-record {
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.team-odds {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #4caf50;
+  min-width: 36px;
+  text-align: right;
+}
+
+.live-badge {
+  background: #c62828;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+}
+
+.score {
+  font-weight: 700;
+  color: #fff;
+  font-size: 0.85rem;
+}
+
 .result-img {
   width: 52px;
   height: 52px;
