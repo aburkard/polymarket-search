@@ -252,19 +252,29 @@ function findMatches(term, idx, idf, vocab, dl, avgDl, C) {
 
   if (term.length >= C.fuzzyMinLen) {
     const maxDist = Math.ceil(term.length * C.fuzzyMaxDistFrac);
+    const fuzzyCandidates = [];
     for (const vt of vocab) {
       if (vt === term || vt.startsWith(term)) continue;
       if (Math.abs(vt.length - term.length) > maxDist) continue;
       if (vt.slice(0, 2) !== term.slice(0, 2)) continue;
       const dist = levenshtein(term, vt);
-      if (dist <= maxDist) {
-        const vtIdf = idf[vt] || 0;
-        const fuzzyMult = (1 - dist / term.length) * C.fuzzyDiscount;
-        for (const posting of idx[vt]) {
-          const [docIdx, tf] = posting;
-          const docLen = dl[docIdx] || avgDl;
-          add(docIdx, bm25Score(tf, vtIdf, docLen, avgDl, K1, B) * fuzzyMult);
-        }
+      if (dist <= maxDist) fuzzyCandidates.push({ vt, dist });
+    }
+    const bestDist = Math.min(...fuzzyCandidates.map((c) => c.dist), 99);
+    const bestCandidates = fuzzyCandidates.filter((c) => c.dist === bestDist);
+    const mostCommon = bestCandidates.reduce(
+      (best, c) => ((idf[c.vt] || 99) < (idf[best.vt] || 99) ? c : best),
+      bestCandidates[0] || { vt: "" },
+    );
+    const idfCap = idf[mostCommon.vt] || 1;
+
+    for (const { vt, dist } of fuzzyCandidates) {
+      const vtIdf = Math.min(idf[vt] || 0, idfCap * 1.5);
+      const fuzzyMult = (1 - dist / term.length) * C.fuzzyDiscount;
+      for (const posting of idx[vt]) {
+        const [docIdx, tf] = posting;
+        const docLen = dl[docIdx] || avgDl;
+        add(docIdx, bm25Score(tf, vtIdf, docLen, avgDl, K1, B) * fuzzyMult);
       }
     }
   }
