@@ -196,21 +196,10 @@ function renderSportCard(r, url) {
   const awayPct = moneyline?.op?.[0] != null ? Math.round(moneyline.op[0] * 100) : null;
   const homePct = moneyline?.op?.[1] != null ? Math.round(moneyline.op[1] * 100) : null;
 
-  const props = (r.mk || [])
-    .filter((m) => m !== moneyline)
-    .map((m) => {
-      const p = m.op?.[0];
-      const pct = p != null ? Math.round(p * 100) + "%" : "–";
-      const label =
-        m.l ||
-        m.q
-          .replace(r.q + ": ", "")
-          .replace(
-            r.q.split(" vs. ").reverse().join(" vs. ") + ": ",
-            "",
-          );
-      return `<span class="outcome">${esc(label)} <b>${pct}</b></span>`;
-    });
+  const spread = (r.mk || []).find((m) => (m.l || "").toLowerCase().startsWith("spread"));
+  const total = (r.mk || []).find((m) => (m.l || "").toLowerCase().startsWith("o/u") && !(m.l || "").toLowerCase().startsWith("1h"));
+
+  const propsLine = [spread?.l, total?.l].filter(Boolean).join("  ·  ");
 
   const liveHtml = r.live
     ? `<span class="live-badge">Live ${esc(r.per || "")}</span><span class="score">${esc(r.sc || "")}</span>`
@@ -220,8 +209,6 @@ function renderSportCard(r, url) {
   if (liveHtml) meta.push(liveHtml);
   meta.push(`<span>${formatVol(r.v)} vol</span>`);
   if (r.gd || r.ed) meta.push(`<span>${r.gd || r.ed}</span>`);
-  if (r.mc > (r.mk || []).length)
-    meta.push(`<span>+${r.mc - (r.mk || []).length} more</span>`);
 
   return `
   <a href="${url}" target="_blank" rel="noopener" class="result result-sport" role="listitem" tabindex="0">
@@ -239,7 +226,7 @@ function renderSportCard(r, url) {
         ${homePct != null ? `<span class="team-odds">${homePct}%</span>` : ""}
       </div>
     </div>
-    ${props.length ? `<div class="result-outcomes">${props.join("")}</div>` : ""}
+    ${propsLine ? `<div class="sport-props">${esc(propsLine)}</div>` : ""}
     <div class="result-meta">${meta.join('<span class="meta-sep"></span>')}</div>
   </a>`;
 }

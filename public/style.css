@@ -296,6 +296,12 @@ h1 {
   font-variant-numeric: tabular-nums; min-width: 36px; text-align: right;
 }
 
+.sport-props {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
 .live-badge {
   background: #dc2626; color: #fff;
   font-size: 0.6rem; font-weight: 600;
