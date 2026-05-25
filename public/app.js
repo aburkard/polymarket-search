@@ -374,14 +374,27 @@ document.getElementById("site-title").addEventListener("click", () => {
   input.focus();
 });
 
-resultsEl.addEventListener("pointerenter", (e) => {
+let tipTimer = null;
+
+function closeTips() {
+  clearTimeout(tipTimer);
+  document.querySelectorAll(".tip-open").forEach((el) => el.classList.remove("tip-open"));
+}
+
+function openTip(pct) {
+  closeTips();
+  pct.classList.add("tip-open");
+  tipTimer = setTimeout(closeTips, 2500);
+}
+
+resultsEl.addEventListener("mouseenter", (e) => {
   const pct = e.target.closest(".outcome-pct");
-  if (pct?.querySelector(".price-tip")) pct.classList.add("tip-open");
+  if (pct?.querySelector(".price-tip")) openTip(pct);
 }, true);
 
-resultsEl.addEventListener("pointerleave", (e) => {
+resultsEl.addEventListener("mouseleave", (e) => {
   const pct = e.target.closest(".outcome-pct");
-  if (pct) pct.classList.remove("tip-open");
+  if (pct) { closeTips(); }
 }, true);
 
 resultsEl.addEventListener("click", (e) => {
@@ -389,9 +402,16 @@ resultsEl.addEventListener("click", (e) => {
   if (pct?.querySelector(".price-tip")) {
     e.preventDefault();
     e.stopPropagation();
-    document.querySelectorAll(".tip-open").forEach((el) => el.classList.remove("tip-open"));
-    pct.classList.toggle("tip-open");
+    if (pct.classList.contains("tip-open")) {
+      closeTips();
+    } else {
+      openTip(pct);
+    }
   }
+});
+
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".outcome-pct")) closeTips();
 });
 
 input.addEventListener("input", handleInput);

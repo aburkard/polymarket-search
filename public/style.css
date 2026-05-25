@@ -368,6 +368,7 @@ h1 {
 
 .outcome-pct {
   position: relative;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .price-tip {
