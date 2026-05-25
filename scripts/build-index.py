@@ -153,14 +153,15 @@ def _best_price(m: dict) -> float:
     ask = float(m.get("bestAsk") or 1)
     spread = ask - bid
     last = float(m.get("lastTradePrice") or 0)
+    vol = float(m.get("volume") or 0)
 
     if spread < 0.05:
         return mid
-    if max(bid, last) > 0:
+    if vol >= 1000 and last > 0:
         return max(bid, last)
-    if spread > 0.8:
-        return 0
-    return mid
+    if bid > 0:
+        return bid
+    return 0
 
 
 STOP_WORDS = {
