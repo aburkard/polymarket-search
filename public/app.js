@@ -148,7 +148,10 @@ function renderCard(r) {
       return p != null && Math.round(p * 100) >= 1;
     });
     const show = (visible.length ? visible : outcomes.slice(0, 2)).slice(0, 3);
-    const isTemporal = r.q && /\bby\b/i.test(r.q) && (r.q.includes("...?") || r.q.includes("___"));
+    const isTemporal = r.q && /\b(by|before|through|hit|when)\b/i.test(r.q) && (/\.\.\.\?|___/.test(r.q) || show.every((o) => {
+      const l = (o.l || "").toLowerCase();
+      return /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|q[1-4]|20\d\d)\b/.test(l);
+    }));
     rowsHtml = show
       .map((o, i) => {
         const p = o.op?.[0];
