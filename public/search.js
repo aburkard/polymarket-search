@@ -166,6 +166,17 @@ export function search(query, data, limit = 20, config = DEFAULT_CONFIG) {
   }
 
   results.sort((a, b) => b._score - a._score);
+
+  const districtMatch = query.match(/\b([a-z]{2})[- ]?(\d{1,2})\b/i);
+  if (districtMatch) {
+    const prefix = `${districtMatch[1]}-${districtMatch[2].padStart(2, "0")}`.toUpperCase();
+    results.sort((a, b) => {
+      const aMatch = a.q.toUpperCase().startsWith(prefix) ? 1 : 0;
+      const bMatch = b.q.toUpperCase().startsWith(prefix) ? 1 : 0;
+      return bMatch - aMatch || b._score - a._score;
+    });
+  }
+
   return results.slice(0, limit);
 }
 
