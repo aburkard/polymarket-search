@@ -244,13 +244,16 @@ def build_index(events: list[dict]) -> dict:
             ctx[t].append([doc_idx, ctx_tf.get(t, 1)])
             df[t] = df.get(t, 0) + 1
 
-        all_yes_prices = []
+        meaningful_prices = []
         for m in active_markets:
             prices = parse_outcome_prices(m.get("outcomePrices"))
-            if prices:
-                all_yes_prices.append(prices[0])
-        price_sum = sum(all_yes_prices) if all_yes_prices else 1
-        norm_factor = price_sum if len(active_markets) > 1 and price_sum > 0 else 1
+            if not prices:
+                continue
+            p = prices[0]
+            vol = float(m.get("volume") or 0)
+            if vol >= 50 or abs(p - 0.5) > 0.1:
+                meaningful_prices.append(p)
+        norm_factor = sum(meaningful_prices) if len(meaningful_prices) > 1 else 1
 
         total_vol24 = sum(float(m.get("volume24hr") or 0) for m in active_markets)
         total_vol = sum(float(m.get("volume") or 0) for m in active_markets)
