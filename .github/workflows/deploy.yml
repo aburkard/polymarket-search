@@ -22,6 +22,8 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      HAS_API_KEY: ${{ secrets.OPENROUTER_API_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -29,30 +31,30 @@ jobs:
         with:
           python-version: '3.12'
 
-      # 1. Fetch fresh data from Polymarket (saves snapshot for enrich.py)
       - name: Fetch data and build index
         run: python scripts/build-index.py
 
-      # 2. Enrich new events (if API key is set)
       - name: Enrich new events
-        if: ${{ secrets.OPENROUTER_API_KEY != '' }}
+        if: env.HAS_API_KEY == 'true'
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: python scripts/enrich.py --limit 100
 
-      # 3. Commit new enrichments back to repo
       - name: Commit enrichments
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -f data/enrichments.jsonl
-          git diff --staged --quiet && echo "No new enrichments" || git commit -m "Update enrichments [skip ci]" && git push
+          if git diff --staged --quiet; then
+            echo "No new enrichments"
+          else
+            git commit -m "Update enrichments [skip ci]"
+            git push
+          fi
 
-      # 4. Rebuild index with any new enrichments
-      - name: Rebuild index
+      - name: Rebuild index with enrichments
         run: python scripts/build-index.py
 
-      # 5. Deploy static site to Pages
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
