@@ -1,6 +1,6 @@
 export const DEFAULT_CONFIG = {
   bm25K1: 1.2,
-  bm25B: 0.75,
+  bm25B: 0.5,
   ctxWeight: 0.7,
   prefixDiscount: 0.5,
   fuzzyMinLen: 4,
@@ -8,7 +8,7 @@ export const DEFAULT_CONFIG = {
   fuzzyDiscount: 0.3,
   volWeight24h: 0.4,
   volWeightTotal: 0.1,
-  coverageExp: 3,
+  coverageExp: 2,
   yearBoostMatch: 3,
   yearBoostMiss: 0.05,
 };
