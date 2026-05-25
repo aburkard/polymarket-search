@@ -24,7 +24,7 @@ ROOT = Path(__file__).parent.parent
 ENRICHMENT_FILE = ROOT / "data" / "enrichments.jsonl"
 INDEX_FILE = ROOT / "public" / "search-data.json"
 
-DEFAULT_MODEL = "google/gemini-3.1-pro-preview"
+DEFAULT_MODEL = "google/gemini-3.5-flash"
 
 SYSTEM_PROMPT = """You help people find prediction markets by generating search aliases.
 
