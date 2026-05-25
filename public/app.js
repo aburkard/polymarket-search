@@ -8,21 +8,43 @@ const input = document.getElementById("search-input");
 const resultsEl = document.getElementById("results");
 const statusEl = document.getElementById("status");
 
+function expandImages(data) {
+  const pfx = data.imgPfx || "";
+  for (const doc of data.docs) {
+    if (doc.im && !doc.im.startsWith("http")) doc.im = pfx + doc.im;
+    for (const mk of doc.mk || []) {
+      if (mk.im && !mk.im.startsWith("http")) mk.im = pfx + mk.im;
+    }
+    for (const tm of doc.tm || []) {
+      if (tm.l && !tm.l.startsWith("http")) tm.l = pfx + tm.l;
+    }
+  }
+}
+
 async function init() {
-  statusEl.textContent = "Loading markets…";
+  statusEl.textContent = "Loading…";
+  input.disabled = false;
+  input.focus();
+
   try {
     const resp = await fetch("search-data.json");
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    data = prepareIndex(await resp.json());
+    const text = await resp.text();
+    statusEl.textContent = "Indexing…";
+
+    // Yield to let the UI update before heavy parse
+    await new Promise((r) => setTimeout(r, 0));
+    const raw = JSON.parse(text);
+    expandImages(raw);
+    data = prepareIndex(raw);
+
     statusEl.textContent = `${data.n.toLocaleString()} markets`;
-    input.disabled = false;
     const urlQuery = new URLSearchParams(window.location.search).get("q");
     if (urlQuery) {
       input.value = urlQuery;
       const results = search(urlQuery, data, 12);
       renderResults(results);
     } else {
-      input.focus();
       showTrending();
     }
   } catch (e) {

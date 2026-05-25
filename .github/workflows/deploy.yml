@@ -55,6 +55,9 @@ jobs:
       - name: Rebuild index with enrichments
         run: python scripts/build-index.py
 
+      - name: Optimize index size
+        run: python scripts/optimize_index.py
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
