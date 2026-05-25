@@ -14,7 +14,7 @@ async function init() {
     const resp = await fetch("search-data.json");
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     data = prepareIndex(await resp.json());
-    statusEl.textContent = `${data.n.toLocaleString()} events loaded`;
+    statusEl.textContent = `${data.n.toLocaleString()} markets`;
     input.disabled = false;
     const urlQuery = new URLSearchParams(window.location.search).get("q");
     if (urlQuery) {
