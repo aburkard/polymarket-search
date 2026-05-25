@@ -14,7 +14,7 @@ async function init() {
     const resp = await fetch("search-data.json");
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     data = prepareIndex(await resp.json());
-    statusEl.textContent = `${data.n.toLocaleString()} markets loaded`;
+    statusEl.textContent = `${data.n.toLocaleString()} events loaded`;
     input.disabled = false;
     input.focus();
     showTrending();
@@ -116,13 +116,15 @@ function renderCard(r) {
     if (pct != null) {
       const yesLeads = pct >= 50;
       outcomesHtml = `
-        <div class="yes-no">
-          <span class="${yesLeads ? "yes" : "dim"}">${pct}% Yes</span>
-          <span class="${yesLeads ? "dim" : "no"}">${100 - pct}% No</span>
-        </div>`;
+        <span class="outcome ${yesLeads ? "outcome-yes" : "outcome-dim"}">Yes <b>${pct}%</b></span>
+        <span class="outcome ${yesLeads ? "outcome-dim" : "outcome-no"}">No <b>${100 - pct}%</b></span>`;
     }
   } else if (outcomes.length > 1) {
-    outcomesHtml = outcomes
+    const visible = outcomes.filter((o) => {
+      const p = o.op?.[0];
+      return p != null && Math.round(p * 100) >= 1;
+    });
+    outcomesHtml = (visible.length ? visible : outcomes.slice(0, 2))
       .map((o) => {
         const p = o.op?.[0];
         const pct = p != null ? Math.round(p * 100) + "%" : "–";

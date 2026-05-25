@@ -30,16 +30,16 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #09090b;
-    --bg-card: #18181b;
-    --bg-card-hover: #1e1e22;
-    --bg-pill: #27272a;
-    --bg-input: #18181b;
-    --border: #27272a;
+    --bg-card: #1a1a1e;
+    --bg-card-hover: #222226;
+    --bg-pill: #2a2a2e;
+    --bg-input: #1a1a1e;
+    --border: #2e2e33;
     --border-hover: #3f3f46;
     --border-focus: #52525b;
     --text: #fafafa;
     --text-secondary: #a1a1aa;
-    --text-muted: #52525b;
+    --text-muted: #71717a;
     --green: #4ade80;
     --green-muted: #166534;
     --red: #f87171;
@@ -296,6 +296,11 @@ h1 {
   color: var(--green);
   font-weight: 600;
 }
+
+.outcome.outcome-yes b { color: var(--green); }
+.outcome.outcome-no b { color: var(--red); }
+.outcome.outcome-dim { opacity: 0.5; }
+.outcome.outcome-dim b { color: var(--text-secondary); }
 
 /* ── Meta ──────────────────────────────────────────────────────────── */
 
