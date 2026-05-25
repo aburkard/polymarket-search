@@ -239,17 +239,19 @@ h1 {
 .result {
   display: flex;
   gap: 12px;
-  padding: 14px 8px;
-  border-bottom: 1px solid rgba(128,128,128,0.1);
+  padding: 12px;
+  border: 1px solid rgba(128,128,128,0.1);
+  border-radius: 10px;
+  margin-bottom: 4px;
   text-decoration: none;
   color: inherit;
-  border-radius: var(--radius-sm);
-  transition: background 0.12s;
+  transition: background 0.12s, border-color 0.12s;
 }
 
-.result:last-child { border-bottom: none; }
-
-.result:hover { background: var(--bg-card-hover); }
+.result:hover {
+  background: var(--bg-card-hover);
+  border-color: rgba(128,128,128,0.2);
+}
 
 .result:focus-visible {
   outline: 2px solid var(--accent);
