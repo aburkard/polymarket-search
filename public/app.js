@@ -250,8 +250,6 @@ function buildMeta(r) {
   const parts = [];
   parts.push(`<span>${formatVol(r.v)} vol</span>`);
   if (r.ed) parts.push(`<span>${r.ed}</span>`);
-  if (r.mc > (r.mk || []).slice(0, 5).length)
-    parts.push(`<span>+${r.mc - Math.min((r.mk || []).length, 5)} more</span>`);
   return parts.join('<span class="meta-sep"></span>');
 }
 
