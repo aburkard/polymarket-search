@@ -177,6 +177,7 @@ h1 {
   transition: border-color 0.12s, box-shadow 0.12s;
 }
 .result:hover { border-color: var(--border-hover); box-shadow: var(--shadow-hover); }
+.result { -webkit-tap-highlight-color: transparent; }
 .result:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .result[aria-selected="true"] { border-color: var(--accent); }
 

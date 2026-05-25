@@ -397,11 +397,11 @@ resultsEl.addEventListener("mouseleave", (e) => {
   if (pct) { closeTips(); }
 }, true);
 
-resultsEl.addEventListener("click", (e) => {
+resultsEl.addEventListener("pointerdown", (e) => {
   const pct = e.target.closest(".outcome-pct");
   if (pct?.querySelector(".price-tip")) {
     e.preventDefault();
-    e.stopPropagation();
+    e.stopImmediatePropagation();
     if (pct.classList.contains("tip-open")) {
       closeTips();
     } else {
@@ -410,7 +410,7 @@ resultsEl.addEventListener("click", (e) => {
   }
 });
 
-document.addEventListener("click", (e) => {
+document.addEventListener("pointerdown", (e) => {
   if (!e.target.closest(".outcome-pct")) closeTips();
 });
 
