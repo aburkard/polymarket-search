@@ -86,6 +86,71 @@ SAMPLE_EVENTS = [
     },
 ]
 
+EXCLUSIVE_EVENT = {
+    "id": "10",
+    "title": "Who will win?",
+    "slug": "who-will-win",
+    "negRisk": True,
+    "enableNegRisk": True,
+    "tags": [{"label": "Politics"}],
+    "markets": [
+        {"id": "1001", "question": "Will Alice win?", "slug": "alice", "closed": False,
+         "volume": "500000", "volume24hr": "10000", "groupItemTitle": "Alice",
+         "outcomePrices": '["0.40", "0.60"]', "bestBid": "0.38", "bestAsk": "0.42", "lastTradePrice": "0.40",
+         "endDate": "2026-12-31T00:00:00Z", "image": ""},
+        {"id": "1002", "question": "Will Bob win?", "slug": "bob", "closed": False,
+         "volume": "500000", "volume24hr": "10000", "groupItemTitle": "Bob",
+         "outcomePrices": '["0.30", "0.70"]', "bestBid": "0.28", "bestAsk": "0.32", "lastTradePrice": "0.30",
+         "endDate": "2026-12-31T00:00:00Z", "image": ""},
+        {"id": "1003", "question": "Will Carol win?", "slug": "carol", "closed": False,
+         "volume": "500000", "volume24hr": "10000", "groupItemTitle": "Carol",
+         "outcomePrices": '["0.20", "0.80"]', "bestBid": "0.18", "bestAsk": "0.22", "lastTradePrice": "0.20",
+         "endDate": "2026-12-31T00:00:00Z", "image": ""},
+    ],
+}
+
+INDEPENDENT_EVENT = {
+    "id": "11",
+    "title": "What will happen?",
+    "slug": "what-will-happen",
+    "negRisk": False,
+    "enableNegRisk": False,
+    "tags": [{"label": "Culture"}],
+    "markets": [
+        {"id": "1101", "question": "Will X happen?", "slug": "x", "closed": False,
+         "volume": "100000", "volume24hr": "5000", "groupItemTitle": "X",
+         "outcomePrices": '["0.60", "0.40"]',
+         "endDate": "2026-12-31T00:00:00Z", "image": ""},
+        {"id": "1102", "question": "Will Y happen?", "slug": "y", "closed": False,
+         "volume": "100000", "volume24hr": "5000", "groupItemTitle": "Y",
+         "outcomePrices": '["0.70", "0.30"]',
+         "endDate": "2026-12-31T00:00:00Z", "image": ""},
+    ],
+}
+
+EXCLUSIVE_WITH_DEAD = {
+    "id": "12",
+    "title": "Big race",
+    "slug": "big-race",
+    "negRisk": True,
+    "enableNegRisk": True,
+    "tags": [],
+    "markets": [
+        {"id": "1201", "question": "Will Fav win?", "slug": "fav", "closed": False,
+         "volume": "100000", "volume24hr": "1000", "groupItemTitle": "Fav",
+         "outcomePrices": '["0.60", "0.40"]',
+         "endDate": "2026-12-31T00:00:00Z", "image": ""},
+        {"id": "1202", "question": "Will Underdog win?", "slug": "underdog", "closed": False,
+         "volume": "100000", "volume24hr": "1000", "groupItemTitle": "Underdog",
+         "outcomePrices": '["0.30", "0.70"]',
+         "endDate": "2026-12-31T00:00:00Z", "image": ""},
+        {"id": "1203", "question": "Will Nobody win?", "slug": "nobody", "closed": False,
+         "volume": "5", "volume24hr": "0", "groupItemTitle": "Nobody",
+         "outcomePrices": '["0.50", "0.50"]',
+         "endDate": "2026-12-31T00:00:00Z", "image": ""},
+    ],
+}
+
 
 class TestTokenize(unittest.TestCase):
     def test_lowercase_and_split(self):
@@ -246,6 +311,73 @@ class TestBuildIndexEmpty(unittest.TestCase):
         events = [{"id": "1", "title": "Empty", "slug": "empty", "tags": [], "markets": []}]
         data = build_index(events)
         self.assertEqual(data["n"], 0)
+
+
+class TestNormalization(unittest.TestCase):
+    def test_exclusive_event_prices_normalized(self):
+        """Mutually exclusive event: prices should be normalized to sum ~100%."""
+        data = build_index([EXCLUSIVE_EVENT])
+        doc = data["docs"][0]
+        prices = [m["op"][0] for m in doc["mk"]]
+        total = sum(prices)
+        self.assertAlmostEqual(total, 1.0, places=1,
+            msg=f"Normalized prices should sum to ~1.0, got {total}")
+
+    def test_exclusive_event_relative_order(self):
+        """Normalization should preserve relative ordering."""
+        data = build_index([EXCLUSIVE_EVENT])
+        doc = data["docs"][0]
+        prices = [m["op"][0] for m in doc["mk"]]
+        self.assertEqual(prices, sorted(prices, reverse=True),
+            msg="Prices should still be in descending order")
+
+    def test_exclusive_event_alice_is_highest(self):
+        """Alice (0.40 raw) should be highest after normalization."""
+        data = build_index([EXCLUSIVE_EVENT])
+        doc = data["docs"][0]
+        self.assertEqual(doc["mk"][0]["l"], "Alice")
+        self.assertGreater(doc["mk"][0]["op"][0], 0.4,
+            msg="Alice should be >40% after normalization (raw sum was 0.9)")
+
+    def test_independent_event_not_normalized(self):
+        """Non-mutually-exclusive event: prices should NOT be normalized."""
+        data = build_index([INDEPENDENT_EVENT])
+        doc = data["docs"][0]
+        prices = [m["op"][0] for m in doc["mk"]]
+        self.assertAlmostEqual(prices[0], 0.70, places=2,
+            msg="Y should stay at ~70% (not normalized)")
+        self.assertAlmostEqual(prices[1], 0.60, places=2,
+            msg="X should stay at ~60% (not normalized)")
+
+    def test_exclusive_with_dead_markets_excluded(self):
+        """Dead markets (low vol, ~50%) should not inflate normalization."""
+        data = build_index([EXCLUSIVE_WITH_DEAD])
+        doc = data["docs"][0]
+        fav = next(m for m in doc["mk"] if m["l"] == "Fav")
+        # Raw: 0.60, sum of meaningful: 0.60+0.30=0.90, normalized: 0.60/0.90=0.667
+        # If dead market included: sum=1.40, normalized: 0.60/1.40=0.43 (wrong)
+        self.assertGreater(fav["op"][0], 0.6,
+            msg="Fav should be >60% (dead market excluded from norm)")
+
+    def test_bid_ask_last_stored(self):
+        """Bid, ask, and last trade price should be stored when available."""
+        data = build_index([EXCLUSIVE_EVENT])
+        doc = data["docs"][0]
+        alice = doc["mk"][0]
+        self.assertIn("bid", alice)
+        self.assertIn("ask", alice)
+        self.assertIn("last", alice)
+        self.assertAlmostEqual(alice["bid"], 0.38, places=2)
+        self.assertAlmostEqual(alice["ask"], 0.42, places=2)
+        self.assertAlmostEqual(alice["last"], 0.40, places=2)
+
+    def test_no_bid_ask_when_absent(self):
+        """Markets without bid/ask data should not have those fields."""
+        data = build_index([INDEPENDENT_EVENT])
+        doc = data["docs"][0]
+        m = doc["mk"][0]
+        self.assertNotIn("bid", m)
+        self.assertNotIn("last", m)
 
 
 if __name__ == "__main__":

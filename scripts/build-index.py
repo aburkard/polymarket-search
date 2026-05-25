@@ -244,16 +244,21 @@ def build_index(events: list[dict]) -> dict:
             ctx[t].append([doc_idx, ctx_tf.get(t, 1)])
             df[t] = df.get(t, 0) + 1
 
-        meaningful_prices = []
-        for m in active_markets:
-            prices = parse_outcome_prices(m.get("outcomePrices"))
-            if not prices:
-                continue
-            p = prices[0]
-            vol = float(m.get("volume") or 0)
-            if vol >= 50 or abs(p - 0.5) > 0.1:
-                meaningful_prices.append(p)
-        norm_factor = sum(meaningful_prices) if len(meaningful_prices) > 1 else 1
+        is_exclusive = bool(ev.get("negRisk") or ev.get("enableNegRisk"))
+
+        norm_factor = 1
+        if is_exclusive and len(active_markets) > 1:
+            meaningful_prices = []
+            for m in active_markets:
+                prices = parse_outcome_prices(m.get("outcomePrices"))
+                if not prices:
+                    continue
+                p = prices[0]
+                vol = float(m.get("volume") or 0)
+                if vol >= 50 or abs(p - 0.5) > 0.1:
+                    meaningful_prices.append(p)
+            if len(meaningful_prices) > 1:
+                norm_factor = sum(meaningful_prices)
 
         total_vol24 = sum(float(m.get("volume24hr") or 0) for m in active_markets)
         total_vol = sum(float(m.get("volume") or 0) for m in active_markets)
@@ -297,6 +302,12 @@ def build_index(events: list[dict]) -> dict:
                 "op": display_prices,
                 "v": round(float(m.get("volume24hr") or 0)),
             }
+            bid = m.get("bestBid")
+            ask = m.get("bestAsk")
+            last = m.get("lastTradePrice")
+            if bid is not None: o["bid"] = round(float(bid), 4)
+            if ask is not None: o["ask"] = round(float(ask), 4)
+            if last is not None: o["last"] = round(float(last), 4)
             mimg = m.get("image") or m.get("icon") or ""
             if mimg and mimg != ev.get("image", ""):
                 o["im"] = mimg
