@@ -39,22 +39,28 @@ export function search(query, data, limit = 20) {
 
   const vocab = data._vocab || Object.keys(data.idx);
   const scores = new Map();
+  const termHits = new Map();
 
   for (const term of terms) {
     const matches = findMatches(term, data.idx, data.idf, vocab);
     for (const [docIdx, score] of matches) {
       scores.set(docIdx, (scores.get(docIdx) || 0) + score);
+      if (!termHits.has(docIdx)) termHits.set(docIdx, new Set());
+      termHits.get(docIdx).add(term);
     }
   }
 
+  const nTerms = terms.length;
   const results = [];
   for (const [docIdx, textScore] of scores) {
     const doc = data.docs[docIdx];
-    const volBoost = Math.log1p(doc.v) * 0.5;
+    const volBoost = Math.log1p(doc.v) * 0.4 + Math.log1p(doc.vt) * 0.2;
+    const coverage = termHits.get(docIdx).size / nTerms;
+    const coveragePenalty = coverage * coverage;
     results.push({
       ...doc,
       _idx: docIdx,
-      _score: textScore * (1 + volBoost),
+      _score: textScore * coveragePenalty * (1 + volBoost),
     });
   }
 
@@ -87,6 +93,7 @@ function findMatches(term, idx, idf, vocab) {
     for (const vt of vocab) {
       if (vt === term || vt.startsWith(term)) continue;
       if (Math.abs(vt.length - term.length) > maxDist) continue;
+      if (vt.slice(0, 2) !== term.slice(0, 2)) continue;
       const dist = levenshtein(term, vt);
       if (dist <= maxDist) {
         const s = (idf[vt] || 1) * (1 - dist / term.length) * 0.6;
