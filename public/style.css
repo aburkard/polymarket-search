@@ -248,6 +248,8 @@ h1 {
 
 .outcome-row.is-no .outcome-pct { color: var(--red); }
 
+.outcome-row.is-temporal .outcome-pct { color: var(--text-secondary); }
+
 .outcome-more {
   font-size: 0.75rem;
   color: var(--text-muted);

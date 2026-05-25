@@ -148,14 +148,16 @@ function renderCard(r) {
       return p != null && Math.round(p * 100) >= 1;
     });
     const show = (visible.length ? visible : outcomes.slice(0, 2)).slice(0, 3);
+    const isTemporal = r.q && /\bby\b/i.test(r.q) && (r.q.includes("...?") || r.q.includes("___"));
     rowsHtml = show
       .map((o, i) => {
         const p = o.op?.[0];
         const pct = p != null ? Math.round(p * 100) + "%" : "–";
         const label = o.l || shortenQuestion(o.q, r.q);
         const oImg = o.im ? `<img src="${o.im}" alt="" class="outcome-icon" loading="lazy">` : "";
+        const cls = isTemporal ? " is-temporal" : (i > 0 ? " is-dim" : "");
         return `
-        <div class="outcome-row${i > 0 ? " is-dim" : ""}">
+        <div class="outcome-row${cls}">
           ${oImg}<span class="outcome-label">${esc(label)}</span>
           <span class="outcome-pct">${pct}</span>
         </div>`;
