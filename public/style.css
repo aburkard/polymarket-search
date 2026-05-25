@@ -28,7 +28,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #09090b;
     --bg-card: #1a1a1e;
     --bg-card-hover: #222226;
@@ -49,6 +49,28 @@
     --shadow-hover: none;
     --shadow-input: none;
   }
+}
+
+:root[data-theme="dark"] {
+  --bg: #09090b;
+  --bg-card: #1a1a1e;
+  --bg-card-hover: #222226;
+  --bg-pill: #2a2a2e;
+  --bg-input: #1a1a1e;
+  --border: #2e2e33;
+  --border-hover: #3f3f46;
+  --border-focus: #52525b;
+  --text: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  --green: #4ade80;
+  --green-muted: #166534;
+  --red: #f87171;
+  --red-muted: #7f1d1d;
+  --accent: #fafafa;
+  --shadow: none;
+  --shadow-hover: none;
+  --shadow-input: none;
 }
 
 *, *::before, *::after {
@@ -77,9 +99,55 @@ body {
 }
 
 header {
-  text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
   margin-bottom: 24px;
+  position: relative;
 }
+
+.theme-toggle {
+  position: absolute;
+  right: 0;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.theme-toggle:hover {
+  color: var(--text);
+  border-color: var(--border-hover);
+}
+
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.theme-toggle svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Light mode: show moon (switch to dark). Dark mode: show sun (switch to light). */
+.icon-sun { display: none; }
+.icon-moon { display: block; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .icon-sun { display: block; }
+  :root:not([data-theme="light"]) .icon-moon { display: none; }
+}
+:root[data-theme="dark"] .icon-sun { display: block; }
+:root[data-theme="dark"] .icon-moon { display: none; }
+:root[data-theme="light"] .icon-sun { display: none; }
+:root[data-theme="light"] .icon-moon { display: block; }
 
 h1 {
   font-size: 1.125rem;
@@ -148,9 +216,12 @@ h1 {
 }
 
 @media (prefers-color-scheme: dark) {
-  #search-input:focus {
+  :root:not([data-theme="light"]) #search-input:focus {
     box-shadow: 0 0 0 3px rgba(250,250,250,0.06);
   }
+}
+:root[data-theme="dark"] #search-input:focus {
+  box-shadow: 0 0 0 3px rgba(250,250,250,0.06);
 }
 
 #search-input::placeholder {

@@ -257,5 +257,47 @@ function esc(s) {
   return el.innerHTML;
 }
 
+// ── Theme toggle ────────────────────────────────────────────────────
+
+function getSystemTheme() {
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+}
+
+function getEffectiveTheme() {
+  const attr = document.documentElement.getAttribute("data-theme");
+  if (attr) return attr;
+  return getSystemTheme();
+}
+
+document.getElementById("theme-toggle").addEventListener("click", () => {
+  const current = getEffectiveTheme();
+  const next = current === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  localStorage.setItem(
+    "theme-pref",
+    JSON.stringify({ theme: next, systemWhenSet: getSystemTheme() }),
+  );
+});
+
+window
+  .matchMedia("(prefers-color-scheme: dark)")
+  .addEventListener("change", () => {
+    const stored = localStorage.getItem("theme-pref");
+    if (stored) {
+      try {
+        const p = JSON.parse(stored);
+        if (getSystemTheme() !== p.systemWhenSet) {
+          localStorage.removeItem("theme-pref");
+          document.documentElement.removeAttribute("data-theme");
+        }
+      } catch {
+        localStorage.removeItem("theme-pref");
+        document.documentElement.removeAttribute("data-theme");
+      }
+    }
+  });
+
 input.addEventListener("input", handleInput);
 init();
