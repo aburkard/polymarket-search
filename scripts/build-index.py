@@ -181,6 +181,7 @@ def build_index(events: list[dict]) -> dict:
         for m in top_markets:
             outcomes.append({
                 "q": m.get("question", ""),
+                "l": m.get("groupItemTitle", ""),
                 "op": parse_outcome_prices(m.get("outcomePrices")),
                 "v": round(float(m.get("volume24hr") or 0)),
             })

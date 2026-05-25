@@ -67,7 +67,7 @@ function renderResults(results) {
           .map((o) => {
             const p = o.op?.[0];
             const pct = p != null ? (p * 100).toFixed(0) + "¢" : "–";
-            const label = shortenQuestion(o.q, r.q);
+            const label = o.l || shortenQuestion(o.q, r.q);
             return `<span class="outcome">${escapeHtml(label)} <b>${pct}</b></span>`;
           })
           .join("");
@@ -110,7 +110,7 @@ function renderSportsResult(r, url, vol) {
     .map((m) => {
       const p = m.op?.[0];
       const pct = p != null ? (p * 100).toFixed(0) + "¢" : "–";
-      const label = m.q.replace(r.q + ": ", "").replace(r.q.split(" vs. ").reverse().join(" vs. ") + ": ", "");
+      const label = m.l || m.q.replace(r.q + ": ", "").replace(r.q.split(" vs. ").reverse().join(" vs. ") + ": ", "");
       return `<span class="outcome">${escapeHtml(label)} <b>${pct}</b></span>`;
     });
 
