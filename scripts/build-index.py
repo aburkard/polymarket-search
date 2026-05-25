@@ -249,8 +249,19 @@ def build_index(events: list[dict]) -> dict:
 
         is_sports = bool(ev.get("sport") or ev.get("teams"))
 
+        is_temporal = (
+            ("by" in event_title.lower() and ("...?" in event_title or "___" in event_title))
+            and len(active_markets) >= 2
+            and any(m.get("groupItemThreshold") is not None for m in active_markets)
+        )
+
         if is_sports:
             top_markets = pick_sports_outcomes(active_markets, event_title)
+        elif is_temporal:
+            top_markets = sorted(
+                active_markets,
+                key=lambda m: float(m.get("groupItemThreshold") or 999),
+            )[:5]
         else:
             top_markets = sorted(
                 active_markets,
