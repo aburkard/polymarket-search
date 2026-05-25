@@ -196,10 +196,33 @@ function renderSportCard(r, url) {
   const awayPct = moneyline?.op?.[0] != null ? Math.round(moneyline.op[0] * 100) : null;
   const homePct = moneyline?.op?.[1] != null ? Math.round(moneyline.op[1] * 100) : null;
 
-  const spread = (r.mk || []).find((m) => (m.l || "").toLowerCase().startsWith("spread"));
-  const total = (r.mk || []).find((m) => (m.l || "").toLowerCase().startsWith("o/u") && !(m.l || "").toLowerCase().startsWith("1h"));
+  const spreadMkt = (r.mk || []).find((m) => (m.l || "").toLowerCase().startsWith("spread"));
+  const totalMkt = (r.mk || []).find((m) => (m.l || "").toLowerCase().startsWith("o/u") && !(m.l || "").toLowerCase().startsWith("1h"));
 
-  const propsLine = [spread?.l, total?.l].filter(Boolean).join("  ·  ");
+  let awaySpread = "", homeSpread = "";
+  if (spreadMkt?.l) {
+    const num = spreadMkt.l.match(/-?\d+\.?\d*/)?.[0] || "";
+    const favInQ = (spreadMkt.q || "").toLowerCase();
+    const awayInFav = favInQ.includes(away.n?.toLowerCase?.() || "___");
+    if (awayInFav) {
+      awaySpread = num ? `-${Math.abs(num)}` : "";
+      homeSpread = num ? `+${Math.abs(num)}` : "";
+    } else {
+      homeSpread = num ? `-${Math.abs(num)}` : "";
+      awaySpread = num ? `+${Math.abs(num)}` : "";
+    }
+  }
+
+  let totalNum = "";
+  let overPct = "", underPct = "";
+  if (totalMkt?.l) {
+    totalNum = totalMkt.l.match(/\d+\.?\d*/)?.[0] || "";
+    overPct = totalMkt.op?.[0] != null ? Math.round(totalMkt.op[0] * 100) + "%" : "";
+    underPct = totalMkt.op?.[1] != null ? Math.round(totalMkt.op[1] * 100) + "%" : "";
+  }
+
+  const hasProps = awaySpread || totalNum;
+  const spreadPct = spreadMkt?.op?.[0] != null ? Math.round(spreadMkt.op[0] * 100) + "%" : "";
 
   const liveHtml = r.live
     ? `<span class="live-badge">Live ${esc(r.per || "")}</span><span class="score">${esc(r.sc || "")}</span>`
@@ -212,21 +235,26 @@ function renderSportCard(r, url) {
 
   return `
   <a href="${url}" target="_blank" rel="noopener" class="result result-sport" role="listitem" tabindex="0">
-    <div class="sport-matchup">
-      <div class="sport-team">
+    ${hasProps ? '<div class="sport-header"><span></span><span class="sport-col-label">ML</span><span class="sport-col-label">Spread</span><span class="sport-col-label">Total</span></div>' : ""}
+    <div class="sport-grid${hasProps ? "" : " sport-grid-simple"}">
+      <div class="sport-team-info">
         ${away.l ? `<img src="${away.l}" alt="" class="team-logo">` : ""}
         <span class="team-name">${esc(away.n)}</span>
         <span class="team-record">${esc(away.r)}</span>
-        ${awayPct != null ? `<span class="team-odds">${awayPct}%</span>` : ""}
       </div>
-      <div class="sport-team">
+      <span class="sport-cell">${awayPct != null ? `${awayPct}%` : ""}</span>
+      ${hasProps ? `<span class="sport-cell">${esc(awaySpread)}</span>` : ""}
+      ${hasProps ? `<span class="sport-cell">${totalNum ? `O ${esc(totalNum)}` : ""}</span>` : ""}
+
+      <div class="sport-team-info">
         ${home.l ? `<img src="${home.l}" alt="" class="team-logo">` : ""}
         <span class="team-name">${esc(home.n)}</span>
         <span class="team-record">${esc(home.r)}</span>
-        ${homePct != null ? `<span class="team-odds">${homePct}%</span>` : ""}
       </div>
+      <span class="sport-cell">${homePct != null ? `${homePct}%` : ""}</span>
+      ${hasProps ? `<span class="sport-cell">${esc(homeSpread)}</span>` : ""}
+      ${hasProps ? `<span class="sport-cell">${totalNum ? `U ${esc(totalNum)}` : ""}</span>` : ""}
     </div>
-    ${propsLine ? `<div class="sport-props">${esc(propsLine)}</div>` : ""}
     <div class="result-meta">${meta.join('<span class="meta-sep"></span>')}</div>
   </a>`;
 }
