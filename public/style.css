@@ -138,6 +138,10 @@ h1 {
   color: var(--text-muted); border: 1px solid var(--text-muted);
   border-radius: 4px; padding: 0 4px; line-height: 1.6; opacity: 0.5;
   transition: opacity 0.15s;
+  display: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .shortcut-hint { display: block; }
 }
 .clear-btn {
   position: absolute;
@@ -158,7 +162,7 @@ h1 {
 .clear-btn:hover { color: var(--text); }
 
 .search-wrap.has-value .clear-btn { display: block; }
-.search-wrap.has-value .shortcut-hint { display: none; }
+.search-wrap.has-value .shortcut-hint { display: none !important; }
 .search-wrap:focus-within .shortcut-hint { opacity: 0; }
 
 #search-input {
