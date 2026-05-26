@@ -141,16 +141,16 @@ h1 {
 }
 .clear-btn {
   position: absolute;
-  right: 36px;
+  right: 12px;
   top: 50%;
   transform: translateY(-50%);
   background: none;
   border: none;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 50%;
+  padding: 2px 5px;
+  border-radius: 4px;
   display: none;
   -webkit-tap-highlight-color: transparent;
 }
