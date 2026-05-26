@@ -31,8 +31,8 @@ def optimize():
         if doc.get("im", "").startswith(IMG_PREFIX):
             doc["im"] = doc["im"][len(IMG_PREFIX):]
 
-        # Strip tags — indexed but not displayed
-        doc.pop("tg", None)
+        # Keep tags as array for filtering (was stripped, now restored)
+        pass
 
         for mk in doc.get("mk", []):
             # Strip outcome question when label exists

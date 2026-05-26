@@ -352,7 +352,7 @@ def build_index(events: list[dict]) -> dict:
             "im": ev.get("image", ""),
             "v": round(total_vol24),
             "vt": round(total_vol),
-            "tg": tag_labels[:100],
+            "tg": [t.get("label", "") if isinstance(t, dict) else str(t) for t in (ev.get("tags") or []) if (t.get("label") if isinstance(t, dict) else str(t))],
             "mc": len(active_markets),
             "mk": outcomes,
         }

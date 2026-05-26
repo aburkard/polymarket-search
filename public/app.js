@@ -3,6 +3,13 @@ import { prepareIndex, search } from "./search.js";
 let data = null;
 let debounceTimer = null;
 let selectedIdx = -1;
+let activeFilters = [];
+
+const HIDDEN_TAGS = new Set([
+  "Hide From New", "Recurring", "Up or Down", "Games", "5M", "15M",
+  "1H", "Rewards", "New", "Earn 4%", "Rewards 20, 4.5, 50",
+  "Rewards Automation 50 4.5 50", "Crypto Prices",
+]);
 
 const input = document.getElementById("search-input");
 const resultsEl = document.getElementById("results");
@@ -32,6 +39,7 @@ function onDataReady() {
 
   statusEl.textContent = `${data.n.toLocaleString()} markets`;
   input.disabled = false;
+  renderFilters();
   const urlQuery = new URLSearchParams(window.location.search).get("q");
   if (urlQuery) {
     input.value = urlQuery;
@@ -112,14 +120,94 @@ function handleInput() {
     }
     history.replaceState(null, "", url);
 
-    if (!query || !data) {
-      showTrending();
-      return;
-    }
-    const results = search(query, data, 12);
-    renderResults(results);
+    renderFilters();
+    updateResults();
     window.scrollTo({ top: 0 });
   }, 80);
+}
+
+const filtersEl = document.getElementById("filters");
+
+function getFilteredDocs() {
+  if (!data || !activeFilters.length) return null;
+  return data.docs.filter((d) =>
+    activeFilters.every((f) => (d.tg || []).includes(f)),
+  );
+}
+
+function getTopTags(docs) {
+  const counts = {};
+  for (const d of docs) {
+    for (const t of d.tg || []) {
+      if (HIDDEN_TAGS.has(t) || activeFilters.includes(t)) continue;
+      counts[t] = (counts[t] || 0) + 1;
+    }
+  }
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([t]) => t);
+}
+
+function renderFilters() {
+  if (!data) { filtersEl.innerHTML = ""; return; }
+  const pool = getFilteredDocs() || data.docs;
+  const tags = getTopTags(pool);
+
+  const activePills = activeFilters
+    .map((f) => `<button class="filter-pill active" data-tag="${esc(f)}">${esc(f)} ✕</button>`)
+    .join("");
+  const tagPills = tags
+    .map((t) => `<button class="filter-pill" data-tag="${esc(t)}">${esc(t)}</button>`)
+    .join("");
+
+  filtersEl.innerHTML = activePills + tagPills;
+}
+
+filtersEl.addEventListener("click", (e) => {
+  const pill = e.target.closest(".filter-pill");
+  if (!pill) return;
+  const tag = pill.dataset.tag;
+  if (activeFilters.includes(tag)) {
+    activeFilters = activeFilters.filter((f) => f !== tag);
+  } else {
+    activeFilters.push(tag);
+  }
+  renderFilters();
+  updateResults();
+});
+
+function updateResults() {
+  const query = input.value.trim();
+  if (!data) return;
+
+  if (!query && !activeFilters.length) {
+    showTrending();
+    return;
+  }
+
+  let results;
+  if (query) {
+    results = search(query, data, 50);
+  } else {
+    results = [...(getFilteredDocs() || data.docs)]
+      .sort((a, b) => b.vt - a.vt);
+  }
+
+  if (activeFilters.length) {
+    results = results.filter((r) =>
+      activeFilters.every((f) => (r.tg || []).includes(f)),
+    );
+  }
+
+  results = results.slice(0, 12);
+  lastRendered = results;
+  if (results.length) {
+    resultsEl.innerHTML = results.map((r) => renderCard(r)).join("");
+    refreshLivePrices(results);
+  } else {
+    resultsEl.innerHTML = '<div class="no-results">No markets found</div>';
+  }
 }
 
 function showTrending() {
