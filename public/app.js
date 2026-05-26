@@ -129,6 +129,24 @@ function handleInput() {
 
 const filtersEl = document.getElementById("filters");
 
+const TAG_DISPLAY = {
+  "counter strike 2": "Counter-Strike 2",
+  "league of legends": "League of Legends",
+  "Fifa Friendly": "FIFA Friendly",
+  "baseball": "Baseball",
+  "hype": "Hype",
+  "primary elections": "Primary Elections",
+  "football": "Football",
+};
+
+function displayTag(tag) {
+  if (TAG_DISPLAY[tag]) return TAG_DISPLAY[tag];
+  if (tag === tag.toUpperCase() || tag === tag.toLowerCase()) {
+    return tag.replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+  return tag;
+}
+
 function getFilteredDocs() {
   if (!data || !activeFilters.length) return null;
   return data.docs.filter((d) =>
@@ -156,10 +174,10 @@ function renderFilters() {
   const tags = getTopTags(pool);
 
   const activePills = activeFilters
-    .map((f) => `<button class="filter-pill active" data-tag="${esc(f)}">${esc(f)} ✕</button>`)
+    .map((f) => `<button class="filter-pill active" data-tag="${esc(f)}">${esc(displayTag(f))} ✕</button>`)
     .join("");
   const tagPills = tags
-    .map((t) => `<button class="filter-pill" data-tag="${esc(t)}">${esc(t)}</button>`)
+    .map((t) => `<button class="filter-pill" data-tag="${esc(t)}">${esc(displayTag(t))}</button>`)
     .join("");
 
   filtersEl.innerHTML = activePills + tagPills;
