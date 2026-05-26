@@ -129,22 +129,8 @@ function handleInput() {
 
 const filtersEl = document.getElementById("filters");
 
-const TAG_DISPLAY = {
-  "counter strike 2": "Counter-Strike 2",
-  "league of legends": "League of Legends",
-  "Fifa Friendly": "FIFA Friendly",
-  "baseball": "Baseball",
-  "hype": "Hype",
-  "primary elections": "Primary Elections",
-  "football": "Football",
-};
-
 function displayTag(tag) {
-  if (TAG_DISPLAY[tag]) return TAG_DISPLAY[tag];
-  if (tag === tag.toUpperCase() || tag === tag.toLowerCase()) {
-    return tag.replace(/\b\w/g, (c) => c.toUpperCase());
-  }
-  return tag;
+  return tag.replace(/\b[a-z]/g, (c) => c.toUpperCase());
 }
 
 function getFilteredDocs() {
