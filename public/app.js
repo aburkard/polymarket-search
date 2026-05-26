@@ -43,6 +43,7 @@ function onDataReady() {
   const urlQuery = new URLSearchParams(window.location.search).get("q");
   if (urlQuery) {
     input.value = urlQuery;
+    input.closest(".search-wrap").classList.add("has-value");
     const results = search(urlQuery, data, 12);
     renderResults(results);
   } else {
@@ -600,5 +601,16 @@ document.addEventListener("pointerdown", (e) => {
   if (!e.target.closest(".outcome-pct")) closeTips();
 });
 
-input.addEventListener("input", handleInput);
+document.getElementById("clear-btn").addEventListener("click", () => {
+  input.value = "";
+  input.closest(".search-wrap").classList.remove("has-value");
+  handleInput();
+  input.focus();
+});
+
+input.addEventListener("input", () => {
+  input.closest(".search-wrap").classList.toggle("has-value", input.value.length > 0);
+  handleInput();
+});
+
 init();
