@@ -127,17 +127,24 @@ function showTrending() {
   const trending = [...data.docs]
     .sort((a, b) => b.v - a.v)
     .slice(0, 10);
+  lastRendered = trending;
   resultsEl.innerHTML =
     '<div class="section-label">Trending</div>' +
     trending.map((r) => renderCard(r)).join("");
+  refreshLivePrices(trending);
 }
+
+let lastRendered = [];
 
 function renderResults(results) {
   if (!results.length) {
     resultsEl.innerHTML = '<div class="no-results">No markets found</div>';
+    lastRendered = [];
     return;
   }
+  lastRendered = results;
   resultsEl.innerHTML = results.map((r) => renderCard(r)).join("");
+  refreshLivePrices(results);
 }
 
 // ── Card rendering ──────────────────────────────────────────────────
@@ -303,6 +310,59 @@ function renderSportCard(r, url) {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
+
+let refreshAbort = null;
+
+async function refreshLivePrices(results) {
+  if (refreshAbort) refreshAbort.abort();
+  const ctrl = new AbortController();
+  refreshAbort = ctrl;
+
+  const slugs = results.map((r) => r.s).filter(Boolean);
+  if (!slugs.length) return;
+
+  try {
+    const url = "https://gamma-api.polymarket.com/events?" +
+      slugs.map((s) => `slug=${encodeURIComponent(s)}`).join("&");
+    const resp = await fetch(url, { signal: ctrl.signal });
+    if (!resp.ok || ctrl.signal.aborted) return;
+    const events = await resp.json();
+
+    const bySlug = {};
+    for (const ev of events) bySlug[ev.slug] = ev;
+
+    for (const r of results) {
+      const live = bySlug[r.s];
+      if (!live) continue;
+
+      if (live.live) r.live = true;
+      if (live.score) r.sc = live.score;
+      if (live.period) r.per = live.period;
+
+      const liveMarkets = (live.markets || []).filter((m) => !m.closed);
+      for (const mk of r.mk || []) {
+        const match = liveMarkets.find(
+          (m) => m.groupItemTitle === mk.l || m.question === mk.q,
+        );
+        if (!match) continue;
+        const op = typeof match.outcomePrices === "string"
+          ? JSON.parse(match.outcomePrices)
+          : match.outcomePrices;
+        if (op?.[0] != null) mk.op = [parseFloat(op[0])];
+        if (op?.[1] != null) mk.op[1] = parseFloat(op[1]);
+        if (match.bestBid != null) mk.bid = parseFloat(match.bestBid);
+        if (match.bestAsk != null) mk.ask = parseFloat(match.bestAsk);
+        if (match.lastTradePrice != null) mk.last = parseFloat(match.lastTradePrice);
+      }
+    }
+
+    if (!ctrl.signal.aborted && results === lastRendered) {
+      resultsEl.innerHTML = results.map((r) => renderCard(r)).join("");
+    }
+  } catch (e) {
+    if (e.name !== "AbortError") console.warn("Live refresh failed:", e);
+  }
+}
 
 function priceTipHtml(o) {
   const parts = [];
