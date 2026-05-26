@@ -313,7 +313,7 @@ function renderSportCard(r, url) {
   const home = r.tm[1] || {};
 
   const moneyline = (r.mk || []).find((m) => {
-    const q = m.q.toLowerCase();
+    const q = (m.q || m.l || "").toLowerCase();
     return (
       !q.includes("spread") &&
       !q.includes("o/u") &&
