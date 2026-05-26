@@ -141,6 +141,7 @@ function getFilteredDocs() {
 }
 
 function getTopTags(docs) {
+  const n = docs.length;
   const counts = {};
   for (const d of docs) {
     for (const t of d.tg || []) {
@@ -149,6 +150,7 @@ function getTopTags(docs) {
     }
   }
   return Object.entries(counts)
+    .filter(([, c]) => c < n)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 8)
     .map(([t]) => t);
