@@ -24,7 +24,7 @@ ROOT = Path(__file__).parent.parent
 ENRICHMENT_FILE = ROOT / "data" / "enrichments.jsonl"
 INDEX_FILE = ROOT / "public" / "search-data.json"
 
-DEFAULT_MODEL = "google/gemini-3.5-flash"
+DEFAULT_MODEL = "deepseek/deepseek-v4-pro"
 
 SYSTEM_PROMPT = """You help people find prediction markets by generating search aliases.
 
@@ -117,7 +117,7 @@ def build_user_message(ev: dict) -> str:
 
 
 def call_llm(user_msg: str, model: str, api_key: str) -> list[str]:
-    payload = json.dumps({
+    body = {
         "model": model,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -126,7 +126,11 @@ def call_llm(user_msg: str, model: str, api_key: str) -> list[str]:
         "temperature": 1.0,
         "max_tokens": 4096,
         "response_format": SCHEMA,
-    }).encode()
+    }
+    # DeepSeek models enable reasoning by default; disable for speed + cost.
+    if model.startswith("deepseek/"):
+        body["reasoning"] = {"enabled": False}
+    payload = json.dumps(body).encode()
 
     req = urllib.request.Request(
         "https://openrouter.ai/api/v1/chat/completions",
