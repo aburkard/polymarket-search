@@ -201,6 +201,7 @@ def main():
     ENRICHMENT_FILE.parent.mkdir(parents=True, exist_ok=True)
     succeeded = 0
     failed = 0
+    consecutive_failures = 0
     t0 = time.time()
 
     with ENRICHMENT_FILE.open("a") as f:
@@ -214,10 +215,16 @@ def main():
                 f.write(json.dumps(entry) + "\n")
                 f.flush()
                 succeeded += 1
+                consecutive_failures = 0
                 print(f"  [{i+1}/{len(to_enrich)}] {title[:50]} → {len(aliases)} aliases")
             except Exception as e:
                 failed += 1
+                consecutive_failures += 1
                 print(f"  [{i+1}/{len(to_enrich)}] {title[:50]} → ERROR: {e}")
+                if consecutive_failures >= 5:
+                    print(f"\nAborting: {consecutive_failures} consecutive failures.")
+                    print("Likely API key issue or model access denied. Check OPENROUTER_API_KEY.")
+                    sys.exit(1)
                 time.sleep(2)
 
             if (i + 1) % 50 == 0:
