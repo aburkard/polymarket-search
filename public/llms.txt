@@ -1,0 +1,70 @@
+# Polymarket Search
+
+Search engine for Polymarket prediction markets. Better ranking than Polymarket's built-in search (BM25 + volume + LLM-enriched aliases + fuzzy matching). Static site, data refreshes every 30 minutes.
+
+## JSON API for agents
+
+The same URL renders HTML for humans and JSON for agents. To get JSON, add `?format=json`:
+
+```
+https://aburkard.github.io/polymarket-search/?q=YOUR_QUERY&format=json
+```
+
+This requires a JS-capable fetcher (headless browser, Playwright, Puppeteer). The page replaces its body with a `<pre>` containing the JSON response. Plain `curl` won't work — use a browser tool.
+
+### Parameters
+
+- `q` (string, required) — search query. Supports typos, abbreviations, nicknames.
+- `format=json` — return JSON instead of rendering UI.
+- `limit` (int, default 20, max 100) — number of results.
+
+### Response shape
+
+```json
+{
+  "query": "canada",
+  "count": 5,
+  "results": [
+    {
+      "q": "Event title",
+      "s": "event-slug",
+      "ed": "2026-12-31",
+      "im": "https://...image url",
+      "v": 12345,
+      "vt": 678901,
+      "tg": ["Tag1", "Tag2"],
+      "mc": 3,
+      "mk": [
+        {
+          "l": "Outcome label",
+          "op": [0.42, 0.58],
+          "bid": 0.41,
+          "ask": 0.43,
+          "last": 0.42
+        }
+      ]
+    }
+  ]
+}
+```
+
+Field reference:
+- `q` — event title
+- `s` — Polymarket event slug. URL: `https://polymarket.com/event/{slug}`
+- `ed` — end date (YYYY-MM-DD)
+- `im` — event image URL
+- `v` — 24h volume in USD
+- `vt` — total volume in USD
+- `tg` — Polymarket-assigned tags
+- `mc` — total markets in event
+- `mk` — top 5 outcomes by relevance
+- `op` — [yes_probability, no_probability]. Already normalized for mutually-exclusive events.
+- `bid`, `ask`, `last` — order book and last trade prices (in dollars, 0-1)
+
+## Data refresh
+
+Index rebuilds every 30 minutes via GitHub Actions. Live prices for displayed results are also fetched from Polymarket's Gamma API on demand.
+
+## Source
+
+https://github.com/aburkard/polymarket-search
