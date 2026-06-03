@@ -37,10 +37,25 @@ function onDataReady() {
   expandImages(raw);
   data = prepareIndex(raw);
 
+  const params = new URLSearchParams(window.location.search);
+  const urlQuery = params.get("q");
+
+  if (params.get("format") === "json") {
+    const limit = Math.min(parseInt(params.get("limit") || "20", 10), 100);
+    const results = urlQuery
+      ? search(urlQuery, data, limit)
+      : [...data.docs].sort((a, b) => b.vt - a.vt).slice(0, limit);
+    document.documentElement.innerHTML = `<pre id="json">${JSON.stringify(
+      { query: urlQuery || null, count: results.length, results },
+      null,
+      2,
+    )}</pre>`;
+    return;
+  }
+
   statusEl.textContent = `${data.n.toLocaleString()} markets`;
   input.disabled = false;
   renderFilters();
-  const urlQuery = new URLSearchParams(window.location.search).get("q");
   if (urlQuery) {
     input.value = urlQuery;
     input.closest(".search-wrap").classList.add("has-value");
