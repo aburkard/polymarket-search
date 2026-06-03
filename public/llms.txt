@@ -2,21 +2,27 @@
 
 Search engine for Polymarket prediction markets. Better ranking than Polymarket's built-in search (BM25 + volume + LLM-enriched aliases + fuzzy matching). Static site, data refreshes every 30 minutes.
 
-## JSON API for agents
+## JSON API (recommended for agents)
 
-The same URL renders HTML for humans and JSON for agents. To get JSON, add `?format=json`:
+A curl-able JSON endpoint runs as a Cloudflare Worker. **Use this if possible — it's faster, cheaper, and works without JavaScript execution.**
 
 ```
-https://aburkard.github.io/polymarket-search/?q=YOUR_QUERY&format=json
+https://polymarket-search-api.aburkard.workers.dev/?q=YOUR_QUERY
 ```
 
-This requires a JS-capable fetcher (headless browser, Playwright, Puppeteer). The page replaces its body with a `<pre>` containing the JSON response. Plain `curl` won't work — use a browser tool.
+Examples:
+
+```
+curl 'https://polymarket-search-api.aburkard.workers.dev/?q=canada'
+curl 'https://polymarket-search-api.aburkard.workers.dev/?q=bitcoin&limit=5'
+curl 'https://polymarket-search-api.aburkard.workers.dev/?trending=1&limit=10'
+```
 
 ### Parameters
 
-- `q` (string, required) — search query. Supports typos, abbreviations, nicknames.
-- `format=json` — return JSON instead of rendering UI.
+- `q` (string) — search query. Supports typos, abbreviations, nicknames.
 - `limit` (int, default 20, max 100) — number of results.
+- `trending` (any value) — when `q` is empty, return top events by volume.
 
 ### Response shape
 
@@ -61,9 +67,19 @@ Field reference:
 - `op` — [yes_probability, no_probability]. Already normalized for mutually-exclusive events.
 - `bid`, `ask`, `last` — order book and last trade prices (in dollars, 0-1)
 
+## Fallback: ?format=json on the static page
+
+If you can't use the worker URL, the static site also supports `?format=json` on its URL:
+
+```
+https://aburkard.github.io/polymarket-search/?q=canada&format=json
+```
+
+This requires a JS-capable fetcher (headless browser, Playwright, Puppeteer) because the JSON is rendered client-side. **Prefer the worker URL above when possible.**
+
 ## Data refresh
 
-Index rebuilds every 30 minutes via GitHub Actions. Live prices for displayed results are also fetched from Polymarket's Gamma API on demand.
+Index rebuilds every 30 minutes via GitHub Actions. Live prices for displayed results are also fetched from Polymarket's Gamma API on demand by the browser UI.
 
 ## Source
 

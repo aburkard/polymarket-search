@@ -11,13 +11,14 @@
   <meta name="twitter:card" content="summary">
   <meta name="color-scheme" content="light dark">
   <!--
-    AI AGENT NOTE: This page also serves a JSON API for agents.
-    Append &format=json to any search URL to get structured results.
-    Requires JS execution (headless browser / Playwright / Puppeteer).
-    Example: /?q=canada&format=json&limit=10
+    AI AGENT NOTE: A curl-able JSON API is available at:
+    https://polymarket-search-api.aburkard.workers.dev/?q=YOUR_QUERY
+    Works with plain curl, no JS execution needed.
+
+    The static page also supports ?format=json (requires headless browser).
     See /llms.txt for full schema and usage.
   -->
-  <meta name="ai-api-endpoint" content="?q={query}&format=json">
+  <meta name="ai-api-endpoint" content="https://polymarket-search-api.aburkard.workers.dev/?q={query}">
   <meta name="ai-api-docs" content="/llms.txt">
   <script>
     // Apply theme immediately to prevent flash
