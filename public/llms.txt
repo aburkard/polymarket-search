@@ -7,15 +7,15 @@ Search engine for Polymarket prediction markets. Better ranking than Polymarket'
 A curl-able JSON endpoint runs as a Cloudflare Worker. **Use this if possible — it's faster, cheaper, and works without JavaScript execution.**
 
 ```
-https://polymarket-search-api.aburkard.workers.dev/?q=YOUR_QUERY
+https://polymarket-search-api.wkr0.workers.dev/?q=YOUR_QUERY
 ```
 
 Examples:
 
 ```
-curl 'https://polymarket-search-api.aburkard.workers.dev/?q=canada'
-curl 'https://polymarket-search-api.aburkard.workers.dev/?q=bitcoin&limit=5'
-curl 'https://polymarket-search-api.aburkard.workers.dev/?trending=1&limit=10'
+curl 'https://polymarket-search-api.wkr0.workers.dev/?q=canada'
+curl 'https://polymarket-search-api.wkr0.workers.dev/?q=bitcoin&limit=5'
+curl 'https://polymarket-search-api.wkr0.workers.dev/?trending=1&limit=10'
 ```
 
 ### Parameters
