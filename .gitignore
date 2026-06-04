@@ -7,3 +7,4 @@ data/
 __pycache__/
 public/search-data.json
 public/search-data.js
+worker/.wrangler/
