@@ -1,6 +1,9 @@
-import { prepareIndex, search } from "./search.js";
+import { prepareIndex, searchMany, topByVolumeMany } from "./search.js?v=4";
 
 let data = null;
+let archivedData = null;
+let archivedLoadPromise = null;
+let includeArchived = false;
 let debounceTimer = null;
 let selectedIdx = -1;
 let activeFilters = [];
@@ -14,6 +17,7 @@ const HIDDEN_TAGS = new Set([
 const input = document.getElementById("search-input");
 const resultsEl = document.getElementById("results");
 const statusEl = document.getElementById("status");
+const archiveToggle = document.getElementById("archive-toggle");
 
 function expandImages(data) {
   const pfx = data.imgPfx || "";
@@ -28,7 +32,79 @@ function expandImages(data) {
   }
 }
 
-function onDataReady() {
+function updateStatus(message = "") {
+  if (!data) {
+    statusEl.textContent = message || "Loading...";
+    return;
+  }
+  if (message) {
+    statusEl.textContent = message;
+    return;
+  }
+  if (includeArchived && !archivedData) {
+    statusEl.textContent = "Loading archived...";
+    return;
+  }
+  const total = data.n + (includeArchived && archivedData ? archivedData.n : 0);
+  statusEl.textContent = `${total.toLocaleString()} events`;
+}
+
+function loadScriptOnce(src, globalName) {
+  if (self[globalName]) return Promise.resolve(self[globalName]);
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = src;
+    script.onload = () => {
+      if (self[globalName]) {
+        resolve(self[globalName]);
+      } else {
+        reject(new Error(`Missing ${globalName}`));
+      }
+    };
+    script.onerror = () => reject(new Error(`Failed to load ${src}`));
+    document.head.appendChild(script);
+  });
+}
+
+async function loadArchivedData() {
+  if (archivedData) return archivedData;
+  if (!archivedLoadPromise) {
+    updateStatus();
+    archivedLoadPromise = loadScriptOnce("search-data-archived.js", "__SDA__")
+      .then((raw) => {
+        expandImages(raw);
+        archivedData = prepareIndex(raw);
+        updateStatus();
+        return archivedData;
+      })
+      .catch((err) => {
+        archivedLoadPromise = null;
+        includeArchived = false;
+        archiveToggle.checked = false;
+        const url = new URL(window.location);
+        url.searchParams.delete("archived");
+        history.replaceState(null, "", url);
+        updateStatus("Archived index unavailable");
+        throw err;
+      });
+  }
+  return archivedLoadPromise;
+}
+
+function getSources() {
+  const sources = [{ data, archived: false }];
+  if (includeArchived && archivedData) {
+    sources.push({
+      data: archivedData,
+      archived: true,
+      scoreMultiplier: 0.92,
+      volumeMultiplier: 0.75,
+    });
+  }
+  return sources;
+}
+
+async function onDataReady() {
   const raw = self.__SD__;
   if (!raw) {
     statusEl.textContent = "Failed to load data";
@@ -39,27 +115,36 @@ function onDataReady() {
 
   const params = new URLSearchParams(window.location.search);
   const urlQuery = params.get("q");
+  includeArchived = params.get("archived") === "1";
+  archiveToggle.checked = includeArchived;
 
   if (params.get("format") === "json") {
+    if (includeArchived) {
+      try { await loadArchivedData(); } catch {}
+    }
     const limit = Math.min(parseInt(params.get("limit") || "20", 10), 100);
     const results = urlQuery
-      ? search(urlQuery, data, limit)
-      : [...data.docs].sort((a, b) => b.vt - a.vt).slice(0, limit);
+      ? searchMany(urlQuery, getSources(), limit)
+      : topByVolumeMany(getSources(), limit);
     document.documentElement.innerHTML = `<pre id="json">${JSON.stringify(
-      { query: urlQuery || null, count: results.length, results },
+      { query: urlQuery || null, archived: includeArchived, count: results.length, results },
       null,
       2,
     )}</pre>`;
     return;
   }
 
-  statusEl.textContent = `${data.n.toLocaleString()} markets`;
+  updateStatus();
   input.disabled = false;
   renderFilters();
+  if (includeArchived) {
+    try { await loadArchivedData(); } catch {}
+    renderFilters();
+  }
   if (urlQuery) {
     input.value = urlQuery;
     input.closest(".search-wrap").classList.add("has-value");
-    const results = search(urlQuery, data, 12);
+    const results = searchMany(urlQuery, getSources(), 12);
     renderResults(results);
   } else {
     input.focus();
@@ -68,7 +153,7 @@ function onDataReady() {
 }
 
 function init() {
-  statusEl.textContent = "Loading…";
+  statusEl.textContent = "Loading...";
   if (self.__SD__) {
     onDataReady();
   } else {
@@ -148,9 +233,18 @@ function displayTag(tag) {
   return tag.replace(/\b[a-z]/g, (c) => c.toUpperCase());
 }
 
+function getAllDocs() {
+  return getSources().flatMap((source) =>
+    (source.data.docs || []).map((doc) => ({
+      ...doc,
+      ar: source.archived ? 1 : doc.ar,
+    })),
+  );
+}
+
 function getFilteredDocs() {
   if (!data || !activeFilters.length) return null;
-  return data.docs.filter((d) =>
+  return getAllDocs().filter((d) =>
     activeFilters.every((f) => (d.tg || []).includes(f)),
   );
 }
@@ -173,7 +267,7 @@ function getTopTags(docs) {
 
 function renderFilters() {
   if (!data) { filtersEl.innerHTML = ""; return; }
-  const pool = getFilteredDocs() || data.docs;
+  const pool = getFilteredDocs() || getAllDocs();
   const tags = getTopTags(pool);
 
   const activePills = activeFilters
@@ -199,9 +293,17 @@ filtersEl.addEventListener("click", (e) => {
   updateResults();
 });
 
-function updateResults() {
+async function updateResults() {
   const query = input.value.trim();
   if (!data) return;
+  if (includeArchived && !archivedData) {
+    try {
+      await loadArchivedData();
+      renderFilters();
+    } catch {
+      return;
+    }
+  }
 
   if (!query && !activeFilters.length) {
     showTrending();
@@ -210,7 +312,7 @@ function updateResults() {
 
   let results;
   if (query) {
-    results = search(query, data, 50);
+    results = searchMany(query, getSources(), 50);
   } else {
     results = [...(getFilteredDocs() || data.docs)]
       .sort((a, b) => b.vt - a.vt);
@@ -234,9 +336,7 @@ function updateResults() {
 
 function showTrending() {
   if (!data) return;
-  const trending = [...data.docs]
-    .sort((a, b) => b.v - a.v)
-    .slice(0, 10);
+  const trending = topByVolumeMany(getSources(), 10);
   lastRendered = trending;
   resultsEl.innerHTML =
     '<div class="section-label">Trending</div>' +
@@ -428,7 +528,7 @@ async function refreshLivePrices(results) {
   const ctrl = new AbortController();
   refreshAbort = ctrl;
 
-  const slugs = results.map((r) => r.s).filter(Boolean);
+  const slugs = results.filter((r) => !r.ar).map((r) => r.s).filter(Boolean);
   if (!slugs.length) return;
 
   try {
@@ -485,6 +585,7 @@ function priceTipHtml(o) {
 
 function buildMeta(r) {
   const parts = [];
+  if (r.ar) parts.push('<span class="archive-badge">Archived</span>');
   parts.push(`<span>${formatVol(r.vt || r.v)} vol</span>`);
   if (r.ed) parts.push(`<span>${r.ed}</span>`);
   return parts.join('<span class="meta-sep"></span>');
@@ -546,6 +647,27 @@ document.getElementById("theme-toggle").addEventListener("click", () => {
     "theme-pref",
     JSON.stringify({ theme: next, systemWhenSet: getSystemTheme() }),
   );
+});
+
+archiveToggle.addEventListener("change", async () => {
+  includeArchived = archiveToggle.checked;
+  const url = new URL(window.location);
+  if (includeArchived) {
+    url.searchParams.set("archived", "1");
+  } else {
+    url.searchParams.delete("archived");
+  }
+  history.replaceState(null, "", url);
+  updateStatus();
+  if (includeArchived) {
+    try {
+      await loadArchivedData();
+    } catch {
+      return;
+    }
+  }
+  renderFilters();
+  updateResults();
 });
 
 window

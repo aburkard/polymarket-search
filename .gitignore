@@ -7,4 +7,7 @@ data/
 __pycache__/
 public/search-data.json
 public/search-data.js
+public/search-data-archived.json
+public/search-data-archived.js
 worker/.wrangler/
+.playwright-mcp/

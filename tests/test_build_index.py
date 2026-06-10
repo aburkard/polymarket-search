@@ -263,6 +263,18 @@ class TestBuildIndex(unittest.TestCase):
         idx = self.data["idx"]
         self.assertIn("150k", idx)
 
+    def test_archived_index_includes_closed_markets(self):
+        data = build_index(
+            SAMPLE_EVENTS,
+            include_closed_markets=True,
+            archived=True,
+        )
+        doc = next(d for d in data["docs"] if d["q"] == "Bitcoin Prices")
+        market_qs = [m["q"] for m in doc["mk"]]
+        self.assertEqual(doc["ar"], 1)
+        self.assertEqual(doc["mc"], 2)
+        self.assertIn("Will Bitcoin hit $200k?", market_qs)
+
     def test_inverted_index_structure(self):
         idx = self.data["idx"]
         self.assertIsInstance(idx, dict)

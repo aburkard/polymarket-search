@@ -19,7 +19,9 @@ import urllib.request
 from pathlib import Path
 
 BASE = "https://gamma-api.polymarket.com"
-OUT = Path(__file__).parent.parent / "public" / "search-data.json"
+PUBLIC = Path(__file__).parent.parent / "public"
+OUT = PUBLIC / "search-data.json"
+ARCHIVED_OUT = PUBLIC / "search-data-archived.json"
 
 USER_AGENT = "polymarket-search-indexer/0.1 (andrewburkard@gmail.com)"
 
@@ -33,14 +35,21 @@ def tokenize(text: str) -> list[str]:
     return [t for t in tokens if len(t) >= 2]
 
 
-def fetch_all_events() -> list[dict]:
+def fetch_all_events(
+    *,
+    active: str = "true",
+    closed: str = "false",
+    page_size: int = 100,
+    max_pages: int = 0,
+) -> list[dict]:
     events = []
     offset = 0
+    pages = 0
     while True:
         qs = urllib.parse.urlencode({
-            "active": "true",
-            "closed": "false",
-            "limit": 100,
+            "active": active,
+            "closed": closed,
+            "limit": page_size,
             "offset": offset,
         })
         url = f"{BASE}/events?{qs}"
@@ -61,9 +70,13 @@ def fetch_all_events() -> list[dict]:
         events.extend(page)
         print(f"  fetched offset={offset} got={len(page)} total={len(events)}")
 
-        if len(page) < 100:
+        pages += 1
+        if len(page) < page_size:
             break
-        offset += 100
+        if max_pages and pages >= max_pages:
+            print(f"  Reached max pages ({max_pages})")
+            break
+        offset += page_size
 
     return events
 
@@ -202,7 +215,12 @@ def load_enrichments() -> dict[str, list[str]]:
     return enrichments
 
 
-def build_index(events: list[dict]) -> dict:
+def build_index(
+    events: list[dict],
+    *,
+    include_closed_markets: bool = False,
+    archived: bool = False,
+) -> dict:
     docs = []
     idx: dict[str, list] = {}
     ctx: dict[str, list] = {}
@@ -221,7 +239,7 @@ def build_index(events: list[dict]) -> dict:
 
         active_markets = []
         for m in ev.get("markets") or []:
-            if m.get("closed"):
+            if m.get("closed") and not include_closed_markets:
                 continue
             vol = float(m.get("volume") or 0)
             vol24 = float(m.get("volume24hr") or 0)
@@ -356,6 +374,8 @@ def build_index(events: list[dict]) -> dict:
             "mc": len(active_markets),
             "mk": outcomes,
         }
+        if archived:
+            doc["ar"] = 1
 
         if is_sports:
             teams = ev.get("teams") or []
@@ -395,11 +415,26 @@ def build_index(events: list[dict]) -> dict:
 
 
 def main():
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--local", help="Read events from a local JSONL snapshot")
+    parser.add_argument(
+        "--archived",
+        action="store_true",
+        help="Build the archived/closed-event index instead of the active index",
+    )
+    parser.add_argument(
+        "--max-pages",
+        type=int,
+        default=0,
+        help="Maximum pages to fetch from Gamma API (0 means no cap)",
+    )
+    args = parser.parse_args()
+
     local_path = None
-    if "--local" in sys.argv:
-        i = sys.argv.index("--local")
-        if i + 1 < len(sys.argv):
-            local_path = sys.argv[i + 1]
+    if args.local:
+        local_path = args.local
 
     print("Building search index...")
 
@@ -408,25 +443,36 @@ def main():
         events = load_local_events(local_path)
     else:
         print("  Fetching from Polymarket API...")
-        events = fetch_all_events()
-        snapshot_path = Path(__file__).parent.parent / "data" / "events_active.jsonl"
-        snapshot_path.parent.mkdir(parents=True, exist_ok=True)
-        with snapshot_path.open("w") as f:
-            for ev in events:
-                f.write(json.dumps(ev, separators=(",", ":")) + "\n")
-        print(f"  Saved snapshot: {snapshot_path}")
+        events = fetch_all_events(
+            active="false" if args.archived else "true",
+            closed="true" if args.archived else "false",
+            page_size=500 if args.archived else 100,
+            max_pages=args.max_pages,
+        )
+        if not args.archived:
+            snapshot_path = Path(__file__).parent.parent / "data" / "events_active.jsonl"
+            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+            with snapshot_path.open("w") as f:
+                for ev in events:
+                    f.write(json.dumps(ev, separators=(",", ":")) + "\n")
+            print(f"  Saved snapshot: {snapshot_path}")
 
     print(f"  Total events: {len(events)}")
 
-    data = build_index(events)
+    data = build_index(
+        events,
+        include_closed_markets=args.archived,
+        archived=args.archived,
+    )
     print(f"  Indexed: {data['n']} events, {len(data['idf'])} unique terms, {data.get('_n_enriched', 0)} enriched")
 
-    OUT.parent.mkdir(parents=True, exist_ok=True)
+    out = ARCHIVED_OUT if args.archived else OUT
+    out.parent.mkdir(parents=True, exist_ok=True)
     raw = json.dumps(data, separators=(",", ":"))
-    OUT.write_text(raw)
+    out.write_text(raw)
 
     size_mb = len(raw) / 1024 / 1024
-    print(f"  Written: {OUT} ({size_mb:.2f} MB)")
+    print(f"  Written: {out} ({size_mb:.2f} MB)")
 
 
 if __name__ == "__main__":

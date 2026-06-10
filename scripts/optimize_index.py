@@ -15,11 +15,12 @@ import json
 from pathlib import Path
 
 IMG_PREFIX = "https://polymarket-upload.s3.us-east-2.amazonaws.com/"
-INDEX_FILE = Path(__file__).parent.parent / "public" / "search-data.json"
+PUBLIC = Path(__file__).parent.parent / "public"
+INDEX_FILE = PUBLIC / "search-data.json"
 
 
-def optimize():
-    raw = INDEX_FILE.read_text()
+def optimize_file(index_file: Path, js_global: str) -> None:
+    raw = index_file.read_text()
     data = json.loads(raw)
     original_size = len(raw)
 
@@ -78,20 +79,24 @@ def optimize():
     optimized = json.dumps(data, separators=(",", ":"))
 
     # Write as JS literal for streaming parse
-    js_path = INDEX_FILE.parent / "search-data.js"
-    js_content = f"self.__SD__={optimized};"
+    js_path = index_file.with_suffix(".js")
+    js_content = f"self.{js_global}={optimized};"
     js_path.write_text(js_content)
 
     # Also write JSON for backwards compat / debugging
-    INDEX_FILE.write_text(optimized)
+    index_file.write_text(optimized)
 
     new_size = len(js_content)
     saved = original_size - len(optimized)
-    print(f"Original: {original_size / 1024 / 1024:.2f} MB")
-    print(f"Optimized: {len(optimized) / 1024 / 1024:.2f} MB")
-    print(f"JS literal: {new_size / 1024 / 1024:.2f} MB")
+    print(f"{index_file.name}:")
+    print(f"  Original: {original_size / 1024 / 1024:.2f} MB")
+    print(f"  Optimized: {len(optimized) / 1024 / 1024:.2f} MB")
+    print(f"  JS literal: {new_size / 1024 / 1024:.2f} MB")
     print(f"Saved: {saved / 1024:.0f} KB ({saved / original_size * 100:.1f}%)")
 
 
 if __name__ == "__main__":
-    optimize()
+    optimize_file(INDEX_FILE, "__SD__")
+    archived = PUBLIC / "search-data-archived.json"
+    if archived.exists():
+        optimize_file(archived, "__SDA__")
