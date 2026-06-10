@@ -301,6 +301,69 @@ export function topByVolumeMany(sources, limit = 20) {
   return merged.slice(0, limit);
 }
 
+export function docTags(doc) {
+  const tags = doc?.tg || [];
+  if (Array.isArray(tags)) return tags.filter(Boolean);
+  if (typeof tags === "string") return tags.split(/\s+/).filter(Boolean);
+  return [];
+}
+
+export function parseFilterParam(value) {
+  if (!value) return [];
+  const seen = new Set();
+  const filters = [];
+  for (const raw of value.split(",")) {
+    const tag = raw.trim();
+    if (!tag || seen.has(tag)) continue;
+    seen.add(tag);
+    filters.push(tag);
+  }
+  return filters;
+}
+
+export function serializeFilterParam(filters) {
+  return [...new Set(filters.map((tag) => tag.trim()).filter(Boolean))].join(",");
+}
+
+export function docsMatchingTags(docs, filters) {
+  if (!filters.length) return docs;
+  return docs.filter((doc) => {
+    const tags = docTags(doc);
+    return filters.every((filter) => tags.includes(filter));
+  });
+}
+
+export function topTagsForDocs(
+  docs,
+  {
+    activeFilters = [],
+    hiddenTags = [],
+    includeUniversal = false,
+    limit = 8,
+    weightByScore = false,
+  } = {},
+) {
+  const counts = {};
+  const docCounts = {};
+  const hidden = new Set(hiddenTags);
+  const active = new Set(activeFilters);
+  for (const doc of docs) {
+    const weight = weightByScore && Number.isFinite(doc._score)
+      ? Math.max(doc._score, 0)
+      : 1;
+    for (const tag of docTags(doc)) {
+      if (hidden.has(tag) || active.has(tag)) continue;
+      counts[tag] = (counts[tag] || 0) + weight;
+      docCounts[tag] = (docCounts[tag] || 0) + 1;
+    }
+  }
+  return Object.entries(counts)
+    .filter(([tag]) => includeUniversal || docCounts[tag] < docs.length)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([tag]) => tag);
+}
+
 function bm25Score(tf, idf, docLen, avgDl, K1, B) {
   const norm = 1 - B + B * (docLen / avgDl);
   return idf * ((tf * (K1 + 1)) / (tf + K1 * norm));

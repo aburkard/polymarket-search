@@ -4,9 +4,13 @@ import {
   tokenize,
   levenshtein,
   prepareIndex,
+  docsMatchingTags,
+  parseFilterParam,
   search,
   searchMany,
+  serializeFilterParam,
   topByVolumeMany,
+  topTagsForDocs,
 } from "../public/search.js";
 
 // ── Test fixtures ───────────────────────────────────────────────────────
@@ -341,5 +345,57 @@ describe("search: multiple indexes", () => {
     ], 5);
     assert.equal(results.length, 5);
     assert.ok(results.some((r) => r.ar === 1));
+  });
+});
+
+// ── Facet filters ───────────────────────────────────────────────────────
+
+describe("facet filters", () => {
+  const data = makeIndex();
+
+  it("serializes and parses unique URL filters", () => {
+    const value = serializeFilterParam(["Sports", "Soccer", "Sports", ""]);
+    assert.equal(value, "Sports,Soccer");
+    assert.deepEqual(parseFilterParam(value), ["Sports", "Soccer"]);
+  });
+
+  it("filters docs by selected tags", () => {
+    const docs = docsMatchingTags(data.docs, ["Sports", "Soccer"]);
+    assert.deepEqual(docs.map((d) => d.s), ["wc-2026"]);
+  });
+
+  it("suggests tags from the current query result pool", () => {
+    const queryDocs = search("world cup", data, 20);
+    const tags = topTagsForDocs(queryDocs, {
+      activeFilters: [],
+      includeUniversal: true,
+      limit: 4,
+    });
+    assert.ok(tags.includes("Sports"));
+    assert.ok(tags.includes("Soccer"));
+    assert.ok(tags.includes("FIFA"));
+    assert.ok(!tags.includes("Politics"));
+  });
+
+  it("omits active and hidden tags from suggestions", () => {
+    const queryDocs = search("world cup", data, 20);
+    const tags = topTagsForDocs(queryDocs, {
+      activeFilters: ["Sports"],
+      hiddenTags: ["FIFA"],
+      includeUniversal: true,
+      limit: 4,
+    });
+    assert.ok(!tags.includes("Sports"));
+    assert.ok(!tags.includes("FIFA"));
+    assert.ok(tags.includes("Soccer"));
+  });
+
+  it("can weight query filter suggestions by result score", () => {
+    const tags = topTagsForDocs([
+      { tg: ["Politics"], _score: 1 },
+      { tg: ["Politics"], _score: 1 },
+      { tg: ["Sports", "Soccer"], _score: 10 },
+    ], { includeUniversal: true, limit: 2, weightByScore: true });
+    assert.deepEqual(tags, ["Soccer", "Sports"]);
   });
 });
