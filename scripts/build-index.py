@@ -32,7 +32,43 @@ def tokenize(text: str) -> list[str]:
     text = re.sub(r"[^a-z0-9.]", " ", text)
     tokens = text.split()
     tokens = [t.strip(".") for t in tokens]
-    return [t for t in tokens if len(t) >= 2]
+    tokens = [t for t in tokens if len(t) >= 2]
+    return expand_numeric_tokens(tokens)
+
+
+def _format_number(value: float) -> str:
+    if value.is_integer():
+        return str(int(value))
+    return str(value).rstrip("0").rstrip(".")
+
+
+def expand_numeric_tokens(tokens: list[str]) -> list[str]:
+    expanded: list[str] = []
+
+    for token in tokens:
+        expanded.append(token)
+        k_match = re.match(r"^(\d+(?:\.\d+)?)k$", token)
+        if k_match:
+            value = float(k_match.group(1)) * 1000
+            if value.is_integer():
+                expanded.append(str(int(value)))
+            continue
+
+        m_match = re.match(r"^(\d+(?:\.\d+)?)m$", token)
+        if m_match:
+            value = float(m_match.group(1)) * 1000000
+            if value.is_integer():
+                expanded.append(str(int(value)))
+            continue
+
+        if re.match(r"^\d{4,}$", token) and token.endswith("000"):
+            value = int(token)
+            if value % 1000000 == 0:
+                expanded.append(f"{_format_number(value / 1000000)}m")
+            if value % 1000 == 0:
+                expanded.append(f"{_format_number(value / 1000)}k")
+
+    return expanded
 
 
 def fetch_all_events(
@@ -97,6 +133,22 @@ def parse_outcome_prices(raw: str | None) -> list[float]:
         return [round(float(p), 4) for p in parsed]
     except (json.JSONDecodeError, ValueError, TypeError):
         return []
+
+
+def market_search_text(m: dict) -> str:
+    parts = [
+        m.get("question", ""),
+    ]
+    group_title = m.get("groupItemTitle", "")
+    numeric_label_parts = re.findall(
+        r"\d[\d,]*(?:\.\d+)?[km]?",
+        str(group_title).lower(),
+    )
+    parts.extend(numeric_label_parts)
+    threshold = m.get("groupItemThreshold")
+    if threshold is not None:
+        parts.append(str(threshold))
+    return " ".join(str(p) for p in parts if p)
 
 
 def _outcome_tier(m: dict, event_title: str) -> int:
@@ -252,8 +304,8 @@ def build_index(
 
         doc_idx = len(docs)
 
-        market_questions = " ".join(m.get("question", "") for m in active_markets)
-        base_text = f"{event_title} {market_questions} {tag_labels}"
+        market_text = " ".join(market_search_text(m) for m in active_markets)
+        base_text = f"{event_title} {market_text} {tag_labels}"
         base_tokens = tokenize(base_text)
         base_terms = set(base_tokens)
 

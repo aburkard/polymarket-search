@@ -59,9 +59,20 @@ describe("tokenize", () => {
   });
 
   it("strips $, %, and commas from numbers", () => {
-    assert.deepEqual(tokenize("$80,000"), ["80000"]);
+    assert.deepEqual(tokenize("$80,000"), ["80000", "80k"]);
     assert.deepEqual(tokenize("3.3%"), ["3.3"]);
-    assert.deepEqual(tokenize("$150k"), ["150k"]);
+    assert.deepEqual(tokenize("$150k"), ["150k", "150000"]);
+  });
+
+  it("normalizes k/m suffixes and whole-number variants", () => {
+    assert.deepEqual(tokenize("5k 5000 2m"), [
+      "5k",
+      "5000",
+      "5000",
+      "5k",
+      "2m",
+      "2000000",
+    ]);
   });
 
   it("filters tokens shorter than 2 chars", () => {
@@ -81,6 +92,7 @@ describe("tokenize", () => {
     assert.deepEqual(tokenize("Bitcoin 100k 2026"), [
       "bitcoin",
       "100k",
+      "100000",
       "2026",
     ]);
   });

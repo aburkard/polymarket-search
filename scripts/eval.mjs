@@ -153,6 +153,8 @@ const EVALS = [
   // ── Edge cases: numbers and prices ───────────────────────────────────
   ["bitcoin 80000", /bitcoin/i, "edge:numbers"],
   ["100k", /bitcoin|100k/i, "edge:numbers"],
+  ["btc 100k 2026", /bitcoin/i, "edge:numbers"],
+  ["ethereum 5000", /ethereum/i, "edge:numbers"],
   ["3.5%", /inflation|rate|fed/i, "edge:numbers"],
 
   // ── Edge cases: repeated/duplicate terms ─────────────────────────────

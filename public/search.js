@@ -14,13 +14,39 @@ export const DEFAULT_CONFIG = {
 };
 
 export function tokenize(text) {
-  return text
+  const base = text
     .toLowerCase()
     .replace(/[$%,]/g, "")
     .replace(/[^a-z0-9.]/g, " ")
     .split(/\s+/)
     .map((t) => t.replace(/^\.+|\.+$/g, ""))
     .filter((t) => t.length >= 2);
+  return expandNumericTokens(base);
+}
+
+function expandNumericTokens(tokens) {
+  const expanded = [];
+  for (const token of tokens) {
+    expanded.push(token);
+    const kMatch = token.match(/^(\d+(?:\.\d+)?)k$/);
+    if (kMatch) {
+      const value = Number(kMatch[1]) * 1000;
+      if (Number.isInteger(value)) expanded.push(String(value));
+      continue;
+    }
+    const mMatch = token.match(/^(\d+(?:\.\d+)?)m$/);
+    if (mMatch) {
+      const value = Number(mMatch[1]) * 1000000;
+      if (Number.isInteger(value)) expanded.push(String(value));
+      continue;
+    }
+    if (/^\d{4,}$/.test(token) && token.endsWith("000")) {
+      const value = Number(token);
+      if (value % 1000000 === 0) expanded.push(`${value / 1000000}m`);
+      if (value % 1000 === 0) expanded.push(`${value / 1000}k`);
+    }
+  }
+  return expanded;
 }
 
 export function levenshtein(a, b) {

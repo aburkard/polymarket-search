@@ -31,6 +31,8 @@ SAMPLE_EVENTS = [
                 "volume24hr": "100000",
                 "endDate": "2026-06-30T12:00:00Z",
                 "image": "https://example.com/btc.jpg",
+                "groupItemTitle": "$100,000",
+                "groupItemThreshold": "100000",
                 "outcomePrices": '["0.15", "0.85"]',
             },
             {
@@ -157,7 +159,7 @@ class TestTokenize(unittest.TestCase):
         self.assertEqual(tokenize("Hello World"), ["hello", "world"])
 
     def test_strip_currency(self):
-        self.assertEqual(tokenize("$80,000"), ["80000"])
+        self.assertEqual(tokenize("$80,000"), ["80000", "80k"])
 
     def test_strip_percent(self):
         self.assertEqual(tokenize("3.3%"), ["3.3"])
@@ -169,13 +171,16 @@ class TestTokenize(unittest.TestCase):
         self.assertEqual(tokenize(""), [])
 
     def test_preserves_numbers(self):
-        self.assertEqual(tokenize("Bitcoin 100k 2026"), ["bitcoin", "100k", "2026"])
+        self.assertEqual(tokenize("Bitcoin 100k 2026"), ["bitcoin", "100k", "100000", "2026"])
+
+    def test_normalizes_suffix_numbers(self):
+        self.assertEqual(tokenize("5k 5000 2m"), ["5k", "5000", "5000", "5k", "2m", "2000000"])
 
     def test_consistency_with_js(self):
         """Key cases that must match the JS tokenizer."""
-        self.assertEqual(tokenize("$150k"), ["150k"])
+        self.assertEqual(tokenize("$150k"), ["150k", "150000"])
         self.assertEqual(tokenize("trump's"), ["trump"])
-        self.assertEqual(tokenize("Will Bitcoin hit $150k?"), ["will", "bitcoin", "hit", "150k"])
+        self.assertEqual(tokenize("Will Bitcoin hit $150k?"), ["will", "bitcoin", "hit", "150k", "150000"])
 
 
 class TestParseOutcomePrices(unittest.TestCase):
@@ -262,6 +267,11 @@ class TestBuildIndex(unittest.TestCase):
     def test_child_market_questions_indexed(self):
         idx = self.data["idx"]
         self.assertIn("150k", idx)
+
+    def test_child_market_labels_and_thresholds_indexed(self):
+        idx = self.data["idx"]
+        self.assertIn("100000", idx)
+        self.assertIn("100k", idx)
 
     def test_archived_index_includes_closed_markets(self):
         data = build_index(
