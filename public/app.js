@@ -37,13 +37,16 @@ function updateStatus(message = "") {
     statusEl.textContent = message || "Loading...";
     return;
   }
-  const active = `${data.n.toLocaleString()} active`;
-  const archived = archivedData
-    ? ` + ${archivedData.n.toLocaleString()} archived`
-    : includeArchived
-      ? " + archived loading..."
-      : "";
-  statusEl.textContent = message || `${active}${archived} events`;
+  if (message) {
+    statusEl.textContent = message;
+    return;
+  }
+  if (includeArchived && !archivedData) {
+    statusEl.textContent = "Loading archived...";
+    return;
+  }
+  const total = data.n + (includeArchived && archivedData ? archivedData.n : 0);
+  statusEl.textContent = `${total.toLocaleString()} events`;
 }
 
 function loadScriptOnce(src, globalName) {

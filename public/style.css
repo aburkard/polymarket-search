@@ -176,14 +176,21 @@ h1 {
 #search-input::placeholder { color: var(--text-muted); }
 #search-input:disabled { opacity: 0.4; }
 
-#status { text-align: center; font-size: 0.75rem; color: var(--text-muted); padding: 6px 0 10px; }
+#status {
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  line-height: 26px;
+  min-width: 76px;
+  text-align: right;
+}
 
-.result-tools {
+.summary-row {
   display: flex;
-  flex-wrap: wrap;
+  justify-content: center;
   align-items: center;
-  gap: 6px;
-  padding-bottom: 12px;
+  gap: 14px;
+  padding: 6px 0 12px;
 }
 
 .archive-toggle {
@@ -246,7 +253,10 @@ h1 {
 .archive-toggle:hover { color: var(--text); }
 
 #filters {
-  display: contents;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-bottom: 12px;
 }
 
 .filter-pill {

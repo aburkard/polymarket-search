@@ -38,7 +38,7 @@
     })();
   </script>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔮</text></svg>">
-  <link rel="stylesheet" href="style.css?v=5">
+  <link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
   <div class="container">
@@ -63,9 +63,8 @@
       <button class="clear-btn" id="clear-btn" aria-label="Clear search" type="button">✕</button>
       <kbd class="shortcut-hint" aria-hidden="true">/</kbd>
     </div>
-    <div id="status" role="status" aria-live="polite"></div>
-    <div class="result-tools">
-      <div id="filters"></div>
+    <div class="summary-row">
+      <div id="status" role="status" aria-live="polite"></div>
       <label class="archive-toggle">
         <input type="checkbox" id="archive-toggle">
         <span class="switch-track" aria-hidden="true">
@@ -74,8 +73,9 @@
         <span class="archive-toggle-label">Include archived</span>
       </label>
     </div>
+    <div id="filters"></div>
     <div id="results" role="list"></div>
   </div>
-  <script type="module" src="app.js?v=4"></script>
+  <script type="module" src="app.js?v=5"></script>
 </body>
 </html>
