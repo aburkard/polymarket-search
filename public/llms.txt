@@ -61,7 +61,7 @@ curl 'https://polymarket-search-api.wkr0.workers.dev/?trending=1&limit=10'
 ```
 
 Field reference:
-- `meta.indexes.active.updatedAt` — active index build timestamp
+- `meta.indexes.active.updatedAt` — active index build timestamp. In the browser UI, visible active-market prices may be refreshed live after render; Worker/API results use the bundled index prices.
 - `meta.indexes.active.events` — active index event count
 - `meta.indexes.archived` — archived index timestamp/count when `archived=1`, otherwise null
 - `q` — event title
@@ -88,7 +88,7 @@ This requires a JS-capable fetcher (headless browser, Playwright, Puppeteer) bec
 
 ## Data refresh
 
-Index rebuilds every 30 minutes via GitHub Actions. Live prices for displayed results are also fetched from Polymarket's Gamma API on demand by the browser UI.
+Index rebuilds every 30 minutes via GitHub Actions. `meta.indexes.*.updatedAt` is the index build timestamp, not a live price-refresh timestamp. Live prices for displayed active results are fetched from Polymarket's Gamma API on demand by the browser UI only. Archived results and Worker/API responses use the bundled index prices.
 
 ## Source
 

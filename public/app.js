@@ -72,7 +72,7 @@ function formatFreshness(ts) {
     const hours = Math.round(minutes / 60);
     value = hours < 48 ? `${hours}h ago` : `${Math.round(hours / 24)}d ago`;
   }
-  return { label: `updated ${value}`, isStale: ageMs > STALE_INDEX_MS };
+  return { label: `index updated ${value}`, isStale: ageMs > STALE_INDEX_MS };
 }
 
 function indexMeta(indexData) {

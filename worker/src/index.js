@@ -111,7 +111,7 @@ export default {
           archived: "set to 1/true/yes to include resolved archived markets",
         },
         responseMeta: {
-          indexes: "active and archived index timestamps/event counts when data is returned",
+          indexes: "active and archived index build timestamps/event counts when data is returned; Worker results use bundled index prices",
         },
         docs: "https://aburkard.github.io/polymarket-search/llms.txt",
         source: "https://github.com/aburkard/polymarket-search",
