@@ -178,6 +178,31 @@ h1 {
 
 #status { text-align: center; font-size: 0.75rem; color: var(--text-muted); padding: 6px 0 12px; }
 
+.search-options {
+  display: flex;
+  justify-content: center;
+  padding-bottom: 12px;
+}
+
+.archive-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.archive-toggle input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+}
+
+.archive-toggle:hover { color: var(--text); }
+
 #filters {
   display: flex;
   flex-wrap: wrap;
@@ -329,6 +354,17 @@ h1 {
   gap: 6px;
   font-size: 0.75rem;
   color: var(--text-muted);
+}
+
+.archive-badge {
+  border: 1px solid var(--border-hover);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  text-transform: uppercase;
 }
 
 .meta-sep {

@@ -1,11 +1,10 @@
-import { prepareIndex, search } from "../../public/search.js";
+import { prepareIndex, searchMany, topByVolumeMany } from "../../public/search.js";
 
 const INDEX_URL = "https://aburkard.github.io/polymarket-search/search-data.json";
+const ARCHIVED_INDEX_URL = "https://aburkard.github.io/polymarket-search/search-data-archived.json";
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
-let cached = null;
-let cachedAt = 0;
-let inflight = null;
+const caches = new Map();
 
 function expandImages(data) {
   const pfx = data.imgPfx || "";
@@ -20,28 +19,37 @@ function expandImages(data) {
   }
 }
 
-async function loadIndex() {
+async function loadIndex(indexUrl) {
+  const state = caches.get(indexUrl) || { cached: null, cachedAt: 0, inflight: null };
   const now = Date.now();
-  if (cached && now - cachedAt < CACHE_TTL_MS) return cached;
-  if (inflight) return inflight;
+  if (state.cached && now - state.cachedAt < CACHE_TTL_MS) return state.cached;
+  if (state.inflight) return state.inflight;
 
-  inflight = (async () => {
-    const resp = await fetch(INDEX_URL, { cf: { cacheTtl: 300 } });
+  state.inflight = (async () => {
+    const resp = await fetch(indexUrl, { cf: { cacheTtl: 300 } });
     if (!resp.ok) throw new Error(`Failed to fetch index: HTTP ${resp.status}`);
     const raw = await resp.json();
     expandImages(raw);
-    cached = prepareIndex(raw);
-    cachedAt = Date.now();
-    inflight = null;
-    return cached;
+    state.cached = prepareIndex(raw);
+    state.cachedAt = Date.now();
+    state.inflight = null;
+    caches.set(indexUrl, state);
+    return state.cached;
   })();
+  caches.set(indexUrl, state);
 
   try {
-    return await inflight;
+    return await state.inflight;
   } catch (e) {
-    inflight = null;
+    state.inflight = null;
+    caches.set(indexUrl, state);
     throw e;
   }
+}
+
+function parseBoolParam(url, name) {
+  const value = url.searchParams.get(name);
+  return value === "1" || value === "true" || value === "yes";
 }
 
 function jsonResponse(body, status = 200) {
@@ -87,11 +95,13 @@ export default {
         usage: {
           search: `${url.origin}/?q=YOUR_QUERY`,
           trending: `${url.origin}/?trending=1&limit=20`,
+          archivedSearch: `${url.origin}/?q=YOUR_QUERY&archived=1`,
         },
         parameters: {
           q: "search query string. Supports typos, abbreviations, nicknames.",
           limit: "number of results (default 20, max 100)",
           trending: "set to any value to fetch top events by volume (when q is empty)",
+          archived: "set to 1/true/yes to include resolved archived markets",
         },
         docs: "https://aburkard.github.io/polymarket-search/llms.txt",
         source: "https://github.com/aburkard/polymarket-search",
@@ -99,13 +109,28 @@ export default {
     }
 
     try {
-      const data = await loadIndex();
+      const includeArchived =
+        parseBoolParam(url, "archived") || parseBoolParam(url, "include_archived");
+      const data = await loadIndex(INDEX_URL);
+      const archivedData = includeArchived
+        ? await loadIndex(ARCHIVED_INDEX_URL)
+        : null;
+      const sources = [{ data, archived: false }];
+      if (archivedData) {
+        sources.push({
+          data: archivedData,
+          archived: true,
+          scoreMultiplier: 0.92,
+          volumeMultiplier: 0.75,
+        });
+      }
       const results = query
-        ? search(query, data, limit)
-        : [...data.docs].sort((a, b) => b.vt - a.vt).slice(0, limit);
+        ? searchMany(query, sources, limit)
+        : topByVolumeMany(sources, limit);
 
       return jsonResponse({
         query: query || null,
+        archived: includeArchived,
         count: results.length,
         results,
       });

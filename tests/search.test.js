@@ -5,6 +5,8 @@ import {
   levenshtein,
   prepareIndex,
   search,
+  searchMany,
+  topByVolumeMany,
 } from "../public/search.js";
 
 // ── Test fixtures ───────────────────────────────────────────────────────
@@ -297,5 +299,35 @@ describe("search: edge cases", () => {
     assert.ok("v" in r);
     assert.ok("mk" in r);
     assert.ok("_score" in r);
+  });
+});
+
+// ── Search: multiple indexes ────────────────────────────────────────────
+
+describe("search: multiple indexes", () => {
+  const active = makeIndex();
+  const archived = makeIndex();
+  archived.docs = archived.docs.map((doc) => ({
+    ...doc,
+    q: doc.s === "btc-prices" ? "Archived Bitcoin $100k Market" : doc.q,
+    ar: 1,
+  }));
+
+  it("merges active and archived results when requested", () => {
+    const results = searchMany("archived bitcoin", [
+      { data: active },
+      { data: archived, archived: true, scoreMultiplier: 0.92 },
+    ]);
+    assert.ok(results.length > 0);
+    assert.ok(results.some((r) => r.ar === 1));
+  });
+
+  it("can rank top results across active and archived indexes by volume", () => {
+    const results = topByVolumeMany([
+      { data: active },
+      { data: archived, archived: true, volumeMultiplier: 0.75 },
+    ], 5);
+    assert.equal(results.length, 5);
+    assert.ok(results.some((r) => r.ar === 1));
   });
 });

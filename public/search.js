@@ -240,6 +240,41 @@ export function search(query, data, limit = 20, config = DEFAULT_CONFIG) {
   return results.slice(0, limit);
 }
 
+export function searchMany(query, sources, limit = 20, config = DEFAULT_CONFIG) {
+  const merged = [];
+  for (const source of sources) {
+    if (!source?.data) continue;
+    const multiplier = source.scoreMultiplier ?? 1;
+    const results = search(query, source.data, limit, config);
+    for (const result of results) {
+      merged.push({
+        ...result,
+        ar: source.archived ? 1 : result.ar,
+        _score: result._score * multiplier,
+      });
+    }
+  }
+  merged.sort((a, b) => b._score - a._score);
+  return merged.slice(0, limit);
+}
+
+export function topByVolumeMany(sources, limit = 20) {
+  const merged = [];
+  for (const source of sources) {
+    if (!source?.data) continue;
+    const multiplier = source.volumeMultiplier ?? 1;
+    for (const doc of source.data.docs || []) {
+      merged.push({
+        ...doc,
+        ar: source.archived ? 1 : doc.ar,
+        _volumeScore: (doc.vt || doc.v || 0) * multiplier,
+      });
+    }
+  }
+  merged.sort((a, b) => b._volumeScore - a._volumeScore);
+  return merged.slice(0, limit);
+}
+
 function bm25Score(tf, idf, docLen, avgDl, K1, B) {
   const norm = 1 - B + B * (docLen / avgDl);
   return idf * ((tf * (K1 + 1)) / (tf + K1 * norm));
