@@ -3,12 +3,13 @@ import {
   outcomeMatchScore,
   parseFilterParam,
   prepareIndex,
-  rankOutcomesForQuery,
+  isTemporalOutcomeGroup,
+  rankOutcomesForDisplay,
   searchMany,
   serializeFilterParam,
   topByVolumeMany,
   topTagsForDocs,
-} from "./search.js?v=5";
+} from "./search.js?v=6";
 
 let data = null;
 let archivedData = null;
@@ -18,6 +19,7 @@ let debounceTimer = null;
 let selectedIdx = -1;
 let activeFilters = [];
 let currentQuery = "";
+let resultRenderToken = 0;
 
 const HIDDEN_TAGS = new Set([
   "Hide From New", "Recurring", "Up or Down", "Games", "5M", "15M",
@@ -353,12 +355,14 @@ function syncFilterUrl() {
 }
 
 async function updateResults() {
+  const renderToken = ++resultRenderToken;
   const query = input.value.trim();
   currentQuery = query;
   if (!data) return;
   if (includeArchived && !archivedData) {
     try {
       await loadArchivedData();
+      if (renderToken !== resultRenderToken) return;
       renderFilters();
     } catch {
       return;
@@ -366,7 +370,7 @@ async function updateResults() {
   }
 
   if (!query && !activeFilters.length) {
-    showTrending();
+    showTrending(renderToken);
     return;
   }
 
@@ -383,6 +387,7 @@ async function updateResults() {
   }
 
   results = results.slice(0, 12);
+  if (renderToken !== resultRenderToken) return;
   lastRendered = results;
   if (results.length) {
     resultsEl.innerHTML = results.map((r) => renderCard(r)).join("");
@@ -392,8 +397,9 @@ async function updateResults() {
   }
 }
 
-function showTrending() {
+function showTrending(renderToken = ++resultRenderToken) {
   if (!data) return;
+  if (renderToken !== resultRenderToken) return;
   currentQuery = "";
   const trending = topByVolumeMany(getSources(), 10);
   lastRendered = trending;
@@ -426,7 +432,7 @@ function renderCard(r) {
     ? `<img src="${r.im}" alt="" class="result-img" loading="lazy">`
     : '<div class="result-img placeholder"></div>';
 
-  const outcomes = rankOutcomesForQuery(r.mk || [], currentQuery).slice(0, 5);
+  const outcomes = rankOutcomesForDisplay(r, currentQuery).slice(0, 5);
   let rowsHtml = "";
 
   if (outcomes.length === 1) {
@@ -451,10 +457,7 @@ function renderCard(r) {
       return p != null && Math.round(p * 100) >= 1;
     });
     const show = (visible.length ? visible : outcomes.slice(0, 2)).slice(0, 3);
-    const isTemporal = r.q && /\b(by|before|through|hit|when)\b/i.test(r.q) && (/\.\.\.\?|___/.test(r.q) || show.every((o) => {
-      const l = (o.l || "").toLowerCase();
-      return /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|q[1-4]|20\d\d)\b/.test(l);
-    }));
+    const isTemporal = isTemporalOutcomeGroup(r, show);
     rowsHtml = show
       .map((o, i) => {
         const p = o.op?.[0];

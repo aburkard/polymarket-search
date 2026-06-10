@@ -6,6 +6,7 @@ import {
   outcomeMatchScore,
   prepareIndex,
   docsMatchingTags,
+  rankOutcomesForDisplay,
   parseFilterParam,
   rankOutcomesForQuery,
   search,
@@ -419,5 +420,51 @@ describe("outcome ranking", () => {
   it("keeps original order when the query does not match outcomes", () => {
     const outcomes = [{ l: "Alice" }, { l: "Bob" }, { l: "Carol" }];
     assert.deepEqual(rankOutcomesForQuery(outcomes, "bitcoin"), outcomes);
+  });
+
+  it("sorts non-temporal display outcomes by probability", () => {
+    const doc = {
+      q: "Republican Presidential Nominee 2028",
+      mk: [
+        { l: "Donald Trump", op: [0.02], v: 100 },
+        { l: "J.D. Vance", op: [0.34], v: 100 },
+        { l: "Marco Rubio", op: [0.24], v: 100 },
+      ],
+    };
+
+    const ranked = rankOutcomesForDisplay(doc, "gop president");
+    assert.deepEqual(ranked.map((o) => o.l), [
+      "J.D. Vance",
+      "Marco Rubio",
+      "Donald Trump",
+    ]);
+  });
+
+  it("keeps query-matched outcomes first even when probability is lower", () => {
+    const doc = {
+      q: "Republican Presidential Nominee 2028",
+      mk: [
+        { l: "Donald Trump", op: [0.02], v: 100 },
+        { l: "J.D. Vance", op: [0.34], v: 100 },
+        { l: "Marco Rubio", op: [0.24], v: 100 },
+      ],
+    };
+
+    const ranked = rankOutcomesForDisplay(doc, "trump president");
+    assert.equal(ranked[0].l, "Donald Trump");
+  });
+
+  it("preserves temporal threshold outcome order", () => {
+    const doc = {
+      q: "Bitcoin above ___ on June 17?",
+      mk: [
+        { l: "56,000", op: [0.94], v: 100 },
+        { l: "60,000", op: [0.72], v: 100 },
+        { l: "58,000", op: [0.84], v: 100 },
+      ],
+    };
+
+    const ranked = rankOutcomesForDisplay(doc, "bitcoin");
+    assert.deepEqual(ranked.map((o) => o.l), ["56,000", "60,000", "58,000"]);
   });
 });
