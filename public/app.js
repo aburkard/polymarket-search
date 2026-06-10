@@ -586,6 +586,19 @@ function renderSportCard(r, url) {
 
 let refreshAbort = null;
 
+function updateThinState(outcome) {
+  if (outcome.bid == null || outcome.ask == null) {
+    delete outcome.thin;
+    return;
+  }
+
+  if (outcome.ask - outcome.bid >= 0.10) {
+    outcome.thin = 1;
+  } else {
+    delete outcome.thin;
+  }
+}
+
 async function refreshLivePrices(results) {
   if (refreshAbort) refreshAbort.abort();
   const ctrl = new AbortController();
@@ -626,6 +639,7 @@ async function refreshLivePrices(results) {
         if (match.bestBid != null) mk.bid = parseFloat(match.bestBid);
         if (match.bestAsk != null) mk.ask = parseFloat(match.bestAsk);
         if (match.lastTradePrice != null) mk.last = parseFloat(match.lastTradePrice);
+        updateThinState(mk);
       }
     }
 
