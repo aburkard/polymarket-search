@@ -49,6 +49,43 @@ export function rankOutcomesForQuery(outcomes, query) {
     .map(({ outcome }) => outcome);
 }
 
+export function outcomeProbability(outcome) {
+  const p = outcome?.op?.[0];
+  return Number.isFinite(p) ? p : -1;
+}
+
+function looksOrderedLabel(label) {
+  const l = (label || "").trim().toLowerCase();
+  return /^[↓↑]?\s*\$?\d/.test(l) ||
+    /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|q[1-4]|20\d\d)\b/.test(l);
+}
+
+export function isTemporalOutcomeGroup(doc, outcomes = doc?.mk || []) {
+  const title = doc?.q || "";
+  if (/\.\.\.\?|___/.test(title)) return true;
+  if (!/\b(above|below|before|by|hit|price|reach|through|when)\b/i.test(title)) {
+    return false;
+  }
+
+  const labels = outcomes.map((o) => o?.l || "").filter(Boolean);
+  return labels.length >= 2 && labels.every(looksOrderedLabel);
+}
+
+export function rankOutcomesForDisplay(doc, query) {
+  const outcomes = rankOutcomesForQuery(doc?.mk || [], query);
+  const hasQueryOutcomeMatch = Boolean(query?.trim()) &&
+    outcomes.some((outcome) => outcomeMatchScore(outcome, query) > 0);
+
+  if (hasQueryOutcomeMatch || isTemporalOutcomeGroup(doc, outcomes)) {
+    return outcomes;
+  }
+
+  return [...outcomes].sort((a, b) =>
+    outcomeProbability(b) - outcomeProbability(a) ||
+    (b.v || 0) - (a.v || 0)
+  );
+}
+
 function expandNumericTokens(tokens) {
   const expanded = [];
   for (const token of tokens) {
