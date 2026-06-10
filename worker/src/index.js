@@ -52,6 +52,13 @@ function parseBoolParam(url, name) {
   return value === "1" || value === "true" || value === "yes";
 }
 
+function indexMeta(data) {
+  return {
+    updatedAt: data.ts || null,
+    events: data.n || 0,
+  };
+}
+
 function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body, null, 2), {
     status,
@@ -103,6 +110,9 @@ export default {
           trending: "set to any value to fetch top events by volume (when q is empty)",
           archived: "set to 1/true/yes to include resolved archived markets",
         },
+        responseMeta: {
+          indexes: "active and archived index timestamps/event counts when data is returned",
+        },
         docs: "https://aburkard.github.io/polymarket-search/llms.txt",
         source: "https://github.com/aburkard/polymarket-search",
       });
@@ -132,6 +142,12 @@ export default {
         query: query || null,
         archived: includeArchived,
         count: results.length,
+        meta: {
+          indexes: {
+            active: indexMeta(data),
+            archived: archivedData ? indexMeta(archivedData) : null,
+          },
+        },
         results,
       });
     } catch (e) {

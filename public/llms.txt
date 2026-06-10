@@ -30,6 +30,12 @@ curl 'https://polymarket-search-api.wkr0.workers.dev/?trending=1&limit=10'
 {
   "query": "canada",
   "count": 5,
+  "meta": {
+    "indexes": {
+      "active": { "updatedAt": "2026-06-10T02:00:00Z", "events": 4642 },
+      "archived": null
+    }
+  },
   "results": [
     {
       "q": "Event title",
@@ -55,6 +61,9 @@ curl 'https://polymarket-search-api.wkr0.workers.dev/?trending=1&limit=10'
 ```
 
 Field reference:
+- `meta.indexes.active.updatedAt` — active index build timestamp
+- `meta.indexes.active.events` — active index event count
+- `meta.indexes.archived` — archived index timestamp/count when `archived=1`, otherwise null
 - `q` — event title
 - `s` — Polymarket event slug. URL: `https://polymarket.com/event/{slug}`
 - `ed` — end date (YYYY-MM-DD)
