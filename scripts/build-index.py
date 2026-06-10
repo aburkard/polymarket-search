@@ -24,6 +24,7 @@ OUT = PUBLIC / "search-data.json"
 ARCHIVED_OUT = PUBLIC / "search-data-archived.json"
 
 USER_AGENT = "polymarket-search-indexer/0.1 (andrewburkard@gmail.com)"
+API_PAGE_SIZE = 100
 MAX_STORED_MARKETS = 12
 
 
@@ -124,6 +125,17 @@ def load_local_events(path: str) -> list[dict]:
         for line in f:
             events.append(json.loads(line))
     return events
+
+
+def fetch_events_for_mode(*, archived: bool = False, max_pages: int = 0) -> list[dict]:
+    # Gamma event pagination is capped at 100 results per page. Asking for more
+    # can make a capped page look like the final page and truncate the index.
+    return fetch_all_events(
+        active="false" if archived else "true",
+        closed="true" if archived else "false",
+        page_size=API_PAGE_SIZE,
+        max_pages=max_pages,
+    )
 
 
 def parse_outcome_prices(raw: str | None) -> list[float]:
@@ -494,12 +506,7 @@ def main():
         events = load_local_events(local_path)
     else:
         print("  Fetching from Polymarket API...")
-        events = fetch_all_events(
-            active="false" if args.archived else "true",
-            closed="true" if args.archived else "false",
-            page_size=500 if args.archived else 100,
-            max_pages=args.max_pages,
-        )
+        events = fetch_events_for_mode(archived=args.archived, max_pages=args.max_pages)
         if not args.archived:
             snapshot_path = Path(__file__).parent.parent / "data" / "events_active.jsonl"
             snapshot_path.parent.mkdir(parents=True, exist_ok=True)

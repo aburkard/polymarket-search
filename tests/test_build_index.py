@@ -5,6 +5,7 @@ import math
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 from importlib import import_module
@@ -13,6 +14,7 @@ build_index_mod = import_module("build-index")
 tokenize = build_index_mod.tokenize
 parse_outcome_prices = build_index_mod.parse_outcome_prices
 build_index = build_index_mod.build_index
+fetch_events_for_mode = build_index_mod.fetch_events_for_mode
 
 
 SAMPLE_EVENTS = [
@@ -222,6 +224,30 @@ class TestParseOutcomePrices(unittest.TestCase):
 
     def test_already_list(self):
         self.assertEqual(parse_outcome_prices(["0.1", "0.9"]), [0.1, 0.9])
+
+
+class TestFetchEventsForMode(unittest.TestCase):
+    def test_active_fetch_uses_gamma_page_size(self):
+        with patch.object(build_index_mod, "fetch_all_events", return_value=[]) as fetch_all_events:
+            fetch_events_for_mode(archived=False, max_pages=3)
+
+        fetch_all_events.assert_called_once_with(
+            active="true",
+            closed="false",
+            page_size=100,
+            max_pages=3,
+        )
+
+    def test_archived_fetch_uses_gamma_page_size(self):
+        with patch.object(build_index_mod, "fetch_all_events", return_value=[]) as fetch_all_events:
+            fetch_events_for_mode(archived=True, max_pages=3)
+
+        fetch_all_events.assert_called_once_with(
+            active="false",
+            closed="true",
+            page_size=100,
+            max_pages=3,
+        )
 
 
 class TestBuildIndex(unittest.TestCase):
