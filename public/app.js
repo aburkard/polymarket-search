@@ -1,7 +1,9 @@
 import {
   docsMatchingTags,
+  outcomeMatchScore,
   parseFilterParam,
   prepareIndex,
+  rankOutcomesForQuery,
   searchMany,
   serializeFilterParam,
   topByVolumeMany,
@@ -15,6 +17,7 @@ let includeArchived = false;
 let debounceTimer = null;
 let selectedIdx = -1;
 let activeFilters = [];
+let currentQuery = "";
 
 const HIDDEN_TAGS = new Set([
   "Hide From New", "Recurring", "Up or Down", "Games", "5M", "15M",
@@ -201,6 +204,7 @@ async function onDataReady() {
   input.disabled = false;
   if (urlQuery) {
     input.value = urlQuery;
+    currentQuery = urlQuery;
     input.closest(".search-wrap").classList.add("has-value");
   }
   renderFilters();
@@ -279,6 +283,7 @@ function handleInput() {
   selectedIdx = -1;
   debounceTimer = setTimeout(() => {
     const query = input.value.trim();
+    currentQuery = query;
     const url = new URL(window.location);
     if (query) {
       url.searchParams.set("q", query);
@@ -371,6 +376,7 @@ function syncFilterUrl() {
 
 async function updateResults() {
   const query = input.value.trim();
+  currentQuery = query;
   if (!data) return;
   if (includeArchived && !archivedData) {
     try {
@@ -410,6 +416,7 @@ async function updateResults() {
 
 function showTrending() {
   if (!data) return;
+  currentQuery = "";
   const trending = topByVolumeMany(getSources(), 10);
   lastRendered = trending;
   resultsEl.innerHTML =
@@ -441,7 +448,7 @@ function renderCard(r) {
     ? `<img src="${r.im}" alt="" class="result-img" loading="lazy">`
     : '<div class="result-img placeholder"></div>';
 
-  const outcomes = (r.mk || []).slice(0, 5);
+  const outcomes = rankOutcomesForQuery(r.mk || [], currentQuery).slice(0, 5);
   let rowsHtml = "";
 
   if (outcomes.length === 1) {
@@ -477,9 +484,13 @@ function renderCard(r) {
         const label = o.l || shortenQuestion(o.q, r.q);
         const oImg = o.im ? `<img src="${o.im}" alt="" class="outcome-icon" loading="lazy">` : "";
         const thin = o.thin ? " is-thin" : "";
-        const cls = isTemporal ? " is-temporal" : (i > 0 ? " is-dim" : "");
+        const isQueryMatch = currentQuery && outcomeMatchScore(o, currentQuery) > 0;
+        const cls = [
+          isTemporal ? "is-temporal" : (i > 0 ? "is-dim" : ""),
+          isQueryMatch ? "is-query-match" : "",
+        ].filter(Boolean).join(" ");
         return `
-        <div class="outcome-row${cls}${thin}">
+        <div class="outcome-row${cls ? ` ${cls}` : ""}${thin}">
           ${oImg}<span class="outcome-label">${esc(label)}</span>
           <span class="outcome-pct">${pct}${priceTipHtml(o)}</span>
         </div>`;
@@ -765,6 +776,7 @@ window
 document.getElementById("site-title").addEventListener("click", () => {
   input.value = "";
   activeFilters = [];
+  currentQuery = "";
   syncFilterUrl();
   handleInput();
   input.focus();

@@ -24,6 +24,7 @@ OUT = PUBLIC / "search-data.json"
 ARCHIVED_OUT = PUBLIC / "search-data-archived.json"
 
 USER_AGENT = "polymarket-search-indexer/0.1 (andrewburkard@gmail.com)"
+MAX_STORED_MARKETS = 12
 
 
 def tokenize(text: str) -> list[str]:
@@ -360,10 +361,8 @@ def build_index(
 
         is_sports = bool(ev.get("sport") or ev.get("teams"))
 
-        is_temporal = (
-            ("by" in event_title.lower() and ("...?" in event_title or "___" in event_title))
-            and len(active_markets) >= 2
-            and any(m.get("groupItemThreshold") is not None for m in active_markets)
+        is_temporal = len(active_markets) >= 2 and any(
+            m.get("groupItemThreshold") is not None for m in active_markets
         )
 
         if is_sports:
@@ -372,13 +371,13 @@ def build_index(
             top_markets = sorted(
                 active_markets,
                 key=lambda m: float(m.get("groupItemThreshold") or 999),
-            )[:5]
+            )[:MAX_STORED_MARKETS]
         else:
             top_markets = sorted(
                 active_markets,
                 key=lambda m: (parse_outcome_prices(m.get("outcomePrices")) or [0])[0],
                 reverse=True,
-            )[:5]
+            )[:MAX_STORED_MARKETS]
 
         outcomes = []
         for m in top_markets:

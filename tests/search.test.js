@@ -3,9 +3,11 @@ import assert from "node:assert/strict";
 import {
   tokenize,
   levenshtein,
+  outcomeMatchScore,
   prepareIndex,
   docsMatchingTags,
   parseFilterParam,
+  rankOutcomesForQuery,
   search,
   searchMany,
   serializeFilterParam,
@@ -397,5 +399,25 @@ describe("facet filters", () => {
       { tg: ["Sports", "Soccer"], _score: 10 },
     ], { includeUniversal: true, limit: 2, weightByScore: true });
     assert.deepEqual(tags, ["Soccer", "Sports"]);
+  });
+});
+
+// ── Outcome ranking ─────────────────────────────────────────────────────
+
+describe("outcome ranking", () => {
+  it("bubbles a numeric query match to the top", () => {
+    const outcomes = [
+      { l: "↑ 3,500", q: "Will Ethereum reach $3,500 by December 31, 2026?" },
+      { l: "↑ 4,000", q: "Will Ethereum reach $4,000 by December 31, 2026?" },
+      { l: "↑ 5,000", q: "Will Ethereum reach $5,000 by December 31, 2026?" },
+    ];
+    const ranked = rankOutcomesForQuery(outcomes, "ethereum 5000");
+    assert.equal(ranked[0].l, "↑ 5,000");
+    assert.ok(outcomeMatchScore(ranked[0], "ethereum 5000") > 0);
+  });
+
+  it("keeps original order when the query does not match outcomes", () => {
+    const outcomes = [{ l: "Alice" }, { l: "Bob" }, { l: "Carol" }];
+    assert.deepEqual(rankOutcomesForQuery(outcomes, "bitcoin"), outcomes);
   });
 });
