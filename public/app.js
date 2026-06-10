@@ -1,4 +1,12 @@
-import { prepareIndex, searchMany, topByVolumeMany } from "./search.js?v=4";
+import {
+  docsMatchingTags,
+  parseFilterParam,
+  prepareIndex,
+  searchMany,
+  serializeFilterParam,
+  topByVolumeMany,
+  topTagsForDocs,
+} from "./search.js?v=5";
 
 let data = null;
 let archivedData = null;
@@ -19,6 +27,7 @@ const resultsEl = document.getElementById("results");
 const statusEl = document.getElementById("status");
 const archiveToggle = document.getElementById("archive-toggle");
 const STALE_INDEX_MS = 90 * 60 * 1000;
+const FILTER_PARAM = "tags";
 
 function expandImages(data) {
   const pfx = data.imgPfx || "";
@@ -148,6 +157,7 @@ async function onDataReady() {
 
   const params = new URLSearchParams(window.location.search);
   const urlQuery = params.get("q");
+  activeFilters = parseFilterParam(params.get(FILTER_PARAM));
   includeArchived = params.get("archived") === "1";
   archiveToggle.checked = includeArchived;
 
@@ -156,13 +166,22 @@ async function onDataReady() {
       try { await loadArchivedData(); } catch {}
     }
     const limit = Math.min(parseInt(params.get("limit") || "20", 10), 100);
-    const results = urlQuery
-      ? searchMany(urlQuery, getSources(), limit)
-      : topByVolumeMany(getSources(), limit);
+    let results;
+    if (urlQuery) {
+      results = searchMany(urlQuery, getSources(), Math.max(limit * 4, 50));
+      if (activeFilters.length) results = docsMatchingTags(results, activeFilters);
+    } else if (activeFilters.length) {
+      results = docsMatchingTags(getAllDocs(), activeFilters)
+        .sort((a, b) => (b.vt || b.v || 0) - (a.vt || a.v || 0));
+    } else {
+      results = topByVolumeMany(getSources(), limit);
+    }
+    results = results.slice(0, limit);
     document.documentElement.innerHTML = `<pre id="json">${JSON.stringify(
       {
         query: urlQuery || null,
         archived: includeArchived,
+        filters: activeFilters,
         count: results.length,
         meta: {
           indexes: {
@@ -180,16 +199,19 @@ async function onDataReady() {
 
   updateStatus();
   input.disabled = false;
+  if (urlQuery) {
+    input.value = urlQuery;
+    input.closest(".search-wrap").classList.add("has-value");
+  }
   renderFilters();
   if (includeArchived) {
     try { await loadArchivedData(); } catch {}
     renderFilters();
   }
   if (urlQuery) {
-    input.value = urlQuery;
-    input.closest(".search-wrap").classList.add("has-value");
-    const results = searchMany(urlQuery, getSources(), 12);
-    renderResults(results);
+    await updateResults();
+  } else if (activeFilters.length) {
+    await updateResults();
   } else {
     input.focus();
     showTrending();
@@ -288,31 +310,29 @@ function getAllDocs() {
 
 function getFilteredDocs() {
   if (!data || !activeFilters.length) return null;
-  return getAllDocs().filter((d) =>
-    activeFilters.every((f) => (d.tg || []).includes(f)),
-  );
+  return docsMatchingTags(getAllDocs(), activeFilters);
 }
 
-function getTopTags(docs) {
-  const n = docs.length;
-  const counts = {};
-  for (const d of docs) {
-    for (const t of d.tg || []) {
-      if (HIDDEN_TAGS.has(t) || activeFilters.includes(t)) continue;
-      counts[t] = (counts[t] || 0) + 1;
-    }
-  }
-  return Object.entries(counts)
-    .filter(([, c]) => c < n)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 8)
-    .map(([t]) => t);
+function getQueryDocs(query) {
+  if (!query) return null;
+  return searchMany(query, getSources(), 80);
+}
+
+function getFilterPool() {
+  const queryDocs = getQueryDocs(input.value.trim());
+  const docs = queryDocs || getAllDocs();
+  return docsMatchingTags(docs, activeFilters);
 }
 
 function renderFilters() {
   if (!data) { filtersEl.innerHTML = ""; return; }
-  const pool = getFilteredDocs() || getAllDocs();
-  const tags = getTopTags(pool);
+  const pool = getFilterPool();
+  const tags = topTagsForDocs(pool, {
+    activeFilters,
+    hiddenTags: HIDDEN_TAGS,
+    includeUniversal: Boolean(input.value.trim()),
+    weightByScore: Boolean(input.value.trim()),
+  });
 
   const activePills = activeFilters
     .map((f) => `<button class="filter-pill active" data-tag="${esc(f)}">${esc(displayTag(f))} ✕</button>`)
@@ -333,9 +353,21 @@ filtersEl.addEventListener("click", (e) => {
   } else {
     activeFilters.push(tag);
   }
+  syncFilterUrl();
   renderFilters();
   updateResults();
 });
+
+function syncFilterUrl() {
+  const url = new URL(window.location);
+  const value = serializeFilterParam(activeFilters);
+  if (value) {
+    url.searchParams.set(FILTER_PARAM, value);
+  } else {
+    url.searchParams.delete(FILTER_PARAM);
+  }
+  history.replaceState(null, "", url);
+}
 
 async function updateResults() {
   const query = input.value.trim();
@@ -363,9 +395,7 @@ async function updateResults() {
   }
 
   if (activeFilters.length) {
-    results = results.filter((r) =>
-      activeFilters.every((f) => (r.tg || []).includes(f)),
-    );
+    results = docsMatchingTags(results, activeFilters);
   }
 
   results = results.slice(0, 12);
@@ -734,6 +764,8 @@ window
 
 document.getElementById("site-title").addEventListener("click", () => {
   input.value = "";
+  activeFilters = [];
+  syncFilterUrl();
   handleInput();
   input.focus();
 });
