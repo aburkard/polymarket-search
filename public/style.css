@@ -394,6 +394,11 @@ h1 {
 .outcome-row.is-dim .outcome-label { color: var(--text-muted); }
 .outcome-row.is-dim .outcome-pct { color: var(--text-muted); font-weight: 500; }
 
+.outcome-row.is-query-match .outcome-label {
+  color: var(--text);
+  font-weight: 500;
+}
+
 .outcome-row.is-no .outcome-pct { color: var(--red); }
 
 .outcome-row.is-thin .outcome-pct { opacity: 0.45; }

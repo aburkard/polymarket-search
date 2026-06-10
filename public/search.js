@@ -24,6 +24,31 @@ export function tokenize(text) {
   return expandNumericTokens(base);
 }
 
+export function outcomeMatchScore(outcome, query) {
+  const queryTerms = tokenize(query);
+  if (!queryTerms.length) return 0;
+
+  const outcomeTerms = new Set(tokenize(`${outcome?.l || ""} ${outcome?.q || ""}`));
+  let score = 0;
+  for (const term of queryTerms) {
+    if (!outcomeTerms.has(term)) continue;
+    score += /^\d/.test(term) ? 5 : 2;
+  }
+  return score;
+}
+
+export function rankOutcomesForQuery(outcomes, query) {
+  if (!query?.trim()) return outcomes;
+  return outcomes
+    .map((outcome, index) => ({
+      outcome,
+      index,
+      score: outcomeMatchScore(outcome, query),
+    }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map(({ outcome }) => outcome);
+}
+
 function expandNumericTokens(tokens) {
   const expanded = [];
   for (const token of tokens) {

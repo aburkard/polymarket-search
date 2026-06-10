@@ -154,6 +154,30 @@ EXCLUSIVE_WITH_DEAD = {
 }
 
 
+THRESHOLD_EVENT = {
+    "id": "13",
+    "title": "What price will Ethereum hit in 2026?",
+    "slug": "ethereum-thresholds",
+    "tags": [{"label": "Crypto"}, {"label": "Ethereum"}],
+    "markets": [
+        {
+            "id": f"130{i}",
+            "question": f"Will Ethereum reach ${i * 1000:,} by December 31, 2026?",
+            "slug": f"eth-{i}k",
+            "closed": False,
+            "volume": "1000",
+            "volume24hr": "100",
+            "groupItemTitle": f"Up {i * 1000:,}",
+            "groupItemThreshold": str(i),
+            "outcomePrices": json.dumps([round((14 - i) / 100, 4), round(1 - ((14 - i) / 100), 4)]),
+            "endDate": "2026-12-31T00:00:00Z",
+            "image": "",
+        }
+        for i in range(1, 14)
+    ],
+}
+
+
 class TestTokenize(unittest.TestCase):
     def test_lowercase_and_split(self):
         self.assertEqual(tokenize("Hello World"), ["hello", "world"])
@@ -272,6 +296,14 @@ class TestBuildIndex(unittest.TestCase):
         idx = self.data["idx"]
         self.assertIn("100000", idx)
         self.assertIn("100k", idx)
+
+    def test_stores_enough_child_markets_for_query_relevant_display(self):
+        data = build_index([THRESHOLD_EVENT])
+        doc = data["docs"][0]
+        labels = [m["l"] for m in doc["mk"]]
+        self.assertEqual(len(doc["mk"]), 12)
+        self.assertIn("Up 5,000", labels)
+        self.assertNotIn("Up 13,000", labels)
 
     def test_archived_index_includes_closed_markets(self):
         data = build_index(
