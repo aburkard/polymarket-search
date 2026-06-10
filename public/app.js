@@ -18,6 +18,7 @@ const input = document.getElementById("search-input");
 const resultsEl = document.getElementById("results");
 const statusEl = document.getElementById("status");
 const archiveToggle = document.getElementById("archive-toggle");
+const STALE_INDEX_MS = 90 * 60 * 1000;
 
 function expandImages(data) {
   const pfx = data.imgPfx || "";
@@ -35,18 +36,50 @@ function expandImages(data) {
 function updateStatus(message = "") {
   if (!data) {
     statusEl.textContent = message || "Loading...";
+    statusEl.classList.remove("is-stale");
     return;
   }
   if (message) {
     statusEl.textContent = message;
+    statusEl.classList.remove("is-stale");
     return;
   }
   if (includeArchived && !archivedData) {
     statusEl.textContent = "Loading archived...";
+    statusEl.classList.remove("is-stale");
     return;
   }
   const total = data.n + (includeArchived && archivedData ? archivedData.n : 0);
-  statusEl.textContent = `${total.toLocaleString()} events`;
+  const freshness = formatFreshness(data.ts);
+  statusEl.classList.toggle("is-stale", freshness.isStale);
+  statusEl.textContent = freshness.label
+    ? `${total.toLocaleString()} events · ${freshness.label}`
+    : `${total.toLocaleString()} events`;
+}
+
+function formatFreshness(ts) {
+  if (!ts) return { label: "", isStale: false };
+  const time = Date.parse(ts);
+  if (!Number.isFinite(time)) return { label: "", isStale: false };
+  const ageMs = Math.max(0, Date.now() - time);
+  const minutes = Math.round(ageMs / 60000);
+  let value;
+  if (minutes < 1) {
+    value = "just now";
+  } else if (minutes < 60) {
+    value = `${minutes}m ago`;
+  } else {
+    const hours = Math.round(minutes / 60);
+    value = hours < 48 ? `${hours}h ago` : `${Math.round(hours / 24)}d ago`;
+  }
+  return { label: `updated ${value}`, isStale: ageMs > STALE_INDEX_MS };
+}
+
+function indexMeta(indexData) {
+  return {
+    updatedAt: indexData.ts || null,
+    events: indexData.n || 0,
+  };
 }
 
 function loadScriptOnce(src, globalName) {
@@ -127,7 +160,18 @@ async function onDataReady() {
       ? searchMany(urlQuery, getSources(), limit)
       : topByVolumeMany(getSources(), limit);
     document.documentElement.innerHTML = `<pre id="json">${JSON.stringify(
-      { query: urlQuery || null, archived: includeArchived, count: results.length, results },
+      {
+        query: urlQuery || null,
+        archived: includeArchived,
+        count: results.length,
+        meta: {
+          indexes: {
+            active: indexMeta(data),
+            archived: archivedData ? indexMeta(archivedData) : null,
+          },
+        },
+        results,
+      },
       null,
       2,
     )}</pre>`;

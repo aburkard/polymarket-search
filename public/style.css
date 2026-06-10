@@ -181,16 +181,27 @@ h1 {
   font-variant-numeric: tabular-nums;
   color: var(--text-muted);
   line-height: 26px;
-  min-width: 76px;
+  min-width: 190px;
   text-align: right;
 }
 
+#status.is-stale { color: var(--red); }
+
 .summary-row {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   align-items: center;
   gap: 14px;
   padding: 6px 0 12px;
+}
+
+@media (max-width: 420px) {
+  #status {
+    min-width: 100%;
+    text-align: center;
+    line-height: 20px;
+  }
 }
 
 .archive-toggle {
