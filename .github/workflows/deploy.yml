@@ -14,7 +14,7 @@ permissions:
 
 concurrency:
   group: deploy
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build-and-deploy:
@@ -31,20 +31,40 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Restore Kalshi metadata cache
+        uses: actions/cache/restore@v4
+        with:
+          path: data/kalshi_event_metadata_open.jsonl
+          key: kalshi-metadata-${{ github.run_id }}
+          restore-keys: |
+            kalshi-metadata-
+
       - name: Fetch data and build index
         run: python scripts/build-index.py
 
       - name: Enrich new events
         if: env.HAS_API_KEY == 'true'
+        continue-on-error: true
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: python scripts/enrich.py --limit 100
+
+      - name: Build Kalshi index
+        run: python scripts/build-kalshi-index.py --skip-metadata
+
+      - name: Enrich new Kalshi events
+        if: env.HAS_API_KEY == 'true'
+        continue-on-error: true
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: python scripts/enrich.py --provider kalshi --limit 100
 
       - name: Commit enrichments
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -f data/enrichments.jsonl
+          git add -f data/kalshi_enrichments.jsonl
           if git diff --staged --quiet; then
             echo "No new enrichments"
           else
@@ -57,6 +77,16 @@ jobs:
 
       - name: Build archived index
         run: python scripts/build-index.py --archived
+
+      - name: Rebuild Kalshi index with enrichments
+        run: python scripts/build-kalshi-index.py
+
+      - name: Save Kalshi metadata cache
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: data/kalshi_event_metadata_open.jsonl
+          key: kalshi-metadata-${{ github.run_id }}
 
       - name: Optimize index size
         run: python scripts/optimize_index.py

@@ -14,23 +14,24 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-IMG_PREFIX = "https://polymarket-upload.s3.us-east-2.amazonaws.com/"
+POLYMARKET_IMG_PREFIX = "https://polymarket-upload.s3.us-east-2.amazonaws.com/"
+KALSHI_IMG_PREFIX = "https://kalshi-public-docs.s3.us-east-1.amazonaws.com/"
 PUBLIC = Path(__file__).parent.parent / "public"
 INDEX_FILE = PUBLIC / "search-data.json"
 
 
-def optimize_file(index_file: Path, js_global: str) -> None:
+def optimize_file(index_file: Path, js_global: str, image_prefix: str = POLYMARKET_IMG_PREFIX) -> None:
     raw = index_file.read_text()
     data = json.loads(raw)
     original_size = len(raw)
 
     # Store prefix for frontend reconstruction
-    data["imgPfx"] = IMG_PREFIX
+    data["imgPfx"] = image_prefix
 
     # Strip image prefix from docs and outcomes
     for doc in data["docs"]:
-        if doc.get("im", "").startswith(IMG_PREFIX):
-            doc["im"] = doc["im"][len(IMG_PREFIX):]
+        if doc.get("im", "").startswith(image_prefix):
+            doc["im"] = doc["im"][len(image_prefix):]
 
         # Keep tags as array for filtering (was stripped, now restored)
         pass
@@ -44,13 +45,13 @@ def optimize_file(index_file: Path, js_global: str) -> None:
             mk.pop("v", None)
 
             # Strip outcome image prefix
-            if mk.get("im", "").startswith(IMG_PREFIX):
-                mk["im"] = mk["im"][len(IMG_PREFIX):]
+            if mk.get("im", "").startswith(image_prefix):
+                mk["im"] = mk["im"][len(image_prefix):]
 
         # Strip team logo prefix
         for tm in doc.get("tm", []):
-            if tm.get("l", "").startswith(IMG_PREFIX):
-                tm["l"] = tm["l"][len(IMG_PREFIX):]
+            if tm.get("l", "").startswith(image_prefix):
+                tm["l"] = tm["l"][len(image_prefix):]
 
     # Reduce IDF precision
     data["idf"] = {k: round(v, 2) for k, v in data["idf"].items()}
@@ -61,6 +62,9 @@ def optimize_file(index_file: Path, js_global: str) -> None:
             continue
         packed = {}
         for term, postings in data[tier].items():
+            if isinstance(postings, str):
+                packed[term] = postings
+                continue
             parts = []
             prev = 0
             for doc_idx, tf in postings:
@@ -100,3 +104,6 @@ if __name__ == "__main__":
     archived = PUBLIC / "search-data-archived.json"
     if archived.exists():
         optimize_file(archived, "__SDA__")
+    kalshi = PUBLIC / "search-data-kalshi.json"
+    if kalshi.exists():
+        optimize_file(kalshi, "__SDK__", KALSHI_IMG_PREFIX)

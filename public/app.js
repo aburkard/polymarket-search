@@ -11,6 +11,31 @@ import {
   topTagsForDocs,
 } from "./search.js?v=6";
 
+const PROVIDERS = {
+  polymarket: {
+    label: "Polymarket",
+    script: "search-data.js",
+    globalName: "__SD__",
+    supportsArchived: true,
+    archivedScript: "search-data-archived.js",
+    archivedGlobalName: "__SDA__",
+  },
+  kalshi: {
+    label: "Kalshi",
+    script: "search-data-kalshi.js",
+    globalName: "__SDK__",
+    supportsArchived: false,
+  },
+};
+
+const providerState = Object.fromEntries(
+  Object.keys(PROVIDERS).map((name) => [
+    name,
+    { data: null, archivedData: null, archivedLoadPromise: null, loadPromise: null },
+  ]),
+);
+
+let provider = "polymarket";
 let data = null;
 let archivedData = null;
 let archivedLoadPromise = null;
@@ -31,7 +56,10 @@ const input = document.getElementById("search-input");
 const resultsEl = document.getElementById("results");
 const statusEl = document.getElementById("status");
 const archiveToggle = document.getElementById("archive-toggle");
+const archiveToggleLabel = archiveToggle.closest(".archive-toggle");
+const providerToggle = document.querySelector(".provider-toggle");
 const FILTER_PARAM = "tags";
+const PROVIDER_PARAM = "provider";
 
 function expandImages(data) {
   const pfx = data.imgPfx || "";
@@ -46,6 +74,55 @@ function expandImages(data) {
   }
 }
 
+function activeProviderConfig() {
+  return PROVIDERS[provider] || PROVIDERS.polymarket;
+}
+
+function syncProviderState() {
+  const state = providerState[provider];
+  data = state.data;
+  archivedData = state.archivedData;
+  archivedLoadPromise = state.archivedLoadPromise;
+}
+
+function normalizeProvider(value) {
+  return PROVIDERS[value] ? value : "polymarket";
+}
+
+function setProviderUi() {
+  const cfg = activeProviderConfig();
+  providerToggle.querySelectorAll(".provider-option").forEach((button) => {
+    const active = button.dataset.provider === provider;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+  archiveToggleLabel.classList.toggle("is-hidden", !cfg.supportsArchived);
+  archiveToggleLabel.setAttribute("aria-hidden", cfg.supportsArchived ? "false" : "true");
+  archiveToggle.disabled = !cfg.supportsArchived;
+  if (!cfg.supportsArchived) {
+    archiveToggle.checked = false;
+  }
+}
+
+async function loadProviderData(name) {
+  const cfg = PROVIDERS[name];
+  const state = providerState[name];
+  if (state.data) return state.data;
+  if (!state.loadPromise) {
+    state.loadPromise = loadScriptOnce(cfg.script, cfg.globalName)
+      .then((raw) => {
+        expandImages(raw);
+        state.data = prepareIndex(raw);
+        return state.data;
+      })
+      .catch((err) => {
+        state.loadPromise = null;
+        throw err;
+      });
+  }
+  return state.loadPromise;
+}
+
 function updateStatus(message = "") {
   if (!data) {
     statusEl.textContent = message || "Loading...";
@@ -57,12 +134,16 @@ function updateStatus(message = "") {
     statusEl.classList.remove("is-stale");
     return;
   }
-  if (includeArchived && !archivedData) {
+  if (activeProviderConfig().supportsArchived && includeArchived && !archivedData) {
     statusEl.textContent = "Loading archived...";
     statusEl.classList.remove("is-stale");
     return;
   }
-  const total = data.n + (includeArchived && archivedData ? archivedData.n : 0);
+  const total = data.n + (
+    activeProviderConfig().supportsArchived && includeArchived && archivedData
+      ? archivedData.n
+      : 0
+  );
   statusEl.classList.remove("is-stale");
   statusEl.textContent = `${total.toLocaleString()} events`;
 }
@@ -92,33 +173,45 @@ function loadScriptOnce(src, globalName) {
 }
 
 async function loadArchivedData() {
-  if (archivedData) return archivedData;
-  if (!archivedLoadPromise) {
+  const providerName = provider;
+  const cfg = activeProviderConfig();
+  const state = providerState[providerName];
+  if (!cfg.supportsArchived) return null;
+  if (state.archivedData) return state.archivedData;
+  if (!state.archivedLoadPromise) {
     updateStatus();
-    archivedLoadPromise = loadScriptOnce("search-data-archived.js", "__SDA__")
+    state.archivedLoadPromise = loadScriptOnce(cfg.archivedScript, cfg.archivedGlobalName)
       .then((raw) => {
         expandImages(raw);
-        archivedData = prepareIndex(raw);
-        updateStatus();
-        return archivedData;
+        state.archivedData = prepareIndex(raw);
+        if (provider === providerName) {
+          archivedData = state.archivedData;
+          archivedLoadPromise = state.archivedLoadPromise;
+          updateStatus();
+        }
+        return state.archivedData;
       })
       .catch((err) => {
-        archivedLoadPromise = null;
-        includeArchived = false;
-        archiveToggle.checked = false;
-        const url = new URL(window.location);
-        url.searchParams.delete("archived");
-        history.replaceState(null, "", url);
-        updateStatus("Archived index unavailable");
+        state.archivedLoadPromise = null;
+        if (provider === providerName) {
+          archivedLoadPromise = null;
+          includeArchived = false;
+          archiveToggle.checked = false;
+          const url = new URL(window.location);
+          url.searchParams.delete("archived");
+          history.replaceState(null, "", url);
+          updateStatus("Archived index unavailable");
+        }
         throw err;
       });
   }
-  return archivedLoadPromise;
+  archivedLoadPromise = state.archivedLoadPromise;
+  return state.archivedLoadPromise;
 }
 
 function getSources() {
   const sources = [{ data, archived: false }];
-  if (includeArchived && archivedData) {
+  if (activeProviderConfig().supportsArchived && includeArchived && archivedData) {
     sources.push({
       data: archivedData,
       archived: true,
@@ -130,19 +223,23 @@ function getSources() {
 }
 
 async function onDataReady() {
-  const raw = self.__SD__;
-  if (!raw) {
-    statusEl.textContent = "Failed to load data";
+  const params = new URLSearchParams(window.location.search);
+  provider = normalizeProvider(params.get(PROVIDER_PARAM) || "polymarket");
+  setProviderUi();
+  updateStatus(`Loading ${activeProviderConfig().label}...`);
+  try {
+    await loadProviderData(provider);
+  } catch {
+    statusEl.textContent = `Failed to load ${activeProviderConfig().label}`;
     return;
   }
-  expandImages(raw);
-  data = prepareIndex(raw);
+  syncProviderState();
 
-  const params = new URLSearchParams(window.location.search);
   const urlQuery = params.get("q");
   activeFilters = parseFilterParam(params.get(FILTER_PARAM));
-  includeArchived = params.get("archived") === "1";
+  includeArchived = activeProviderConfig().supportsArchived && params.get("archived") === "1";
   archiveToggle.checked = includeArchived;
+  setProviderUi();
 
   if (params.get("format") === "json") {
     if (includeArchived) {
@@ -163,6 +260,7 @@ async function onDataReady() {
     document.documentElement.innerHTML = `<pre id="json">${JSON.stringify(
       {
         query: urlQuery || null,
+        provider,
         archived: includeArchived,
         filters: activeFilters,
         count: results.length,
@@ -204,15 +302,7 @@ async function onDataReady() {
 
 function init() {
   statusEl.textContent = "Loading...";
-  if (self.__SD__) {
-    onDataReady();
-  } else {
-    const script = document.createElement("script");
-    script.src = "search-data.js";
-    script.onload = onDataReady;
-    script.onerror = () => { statusEl.textContent = "Failed to load data"; };
-    document.head.appendChild(script);
-  }
+  onDataReady();
 }
 
 // ── Keyboard ────────────────────────────────────────────────────────
@@ -354,6 +444,17 @@ function syncFilterUrl() {
   history.replaceState(null, "", url);
 }
 
+function syncProviderUrl() {
+  const url = new URL(window.location);
+  if (provider === "polymarket") {
+    url.searchParams.delete(PROVIDER_PARAM);
+  } else {
+    url.searchParams.set(PROVIDER_PARAM, provider);
+    url.searchParams.delete("archived");
+  }
+  history.replaceState(null, "", url);
+}
+
 async function updateResults() {
   const renderToken = ++resultRenderToken;
   const query = input.value.trim();
@@ -425,12 +526,10 @@ function renderResults(results) {
 // ── Card rendering ──────────────────────────────────────────────────
 
 function renderCard(r) {
-  const url = `https://polymarket.com/event/${r.s}`;
+  const url = resultUrl(r);
   if (r.tm) return renderSportCard(r, url);
 
-  const img = r.im
-    ? `<img src="${r.im}" alt="" class="result-img" loading="lazy">`
-    : '<div class="result-img placeholder"></div>';
+  const img = resultImageHtml(r);
 
   const outcomes = rankOutcomesForDisplay(r, currentQuery).slice(0, 5);
   let rowsHtml = "";
@@ -494,6 +593,30 @@ function renderCard(r) {
     ${rowsHtml ? `<div class="outcome-rows">${rowsHtml}</div>` : ""}
     <div class="result-meta">${meta}</div>
   </a>`;
+}
+
+function resultUrl(r) {
+  if (r.u) return r.u;
+  if (r.p === "kalshi") return `https://kalshi.com/markets/${r.s}`;
+  return `https://polymarket.com/event/${r.s}`;
+}
+
+function resultImageHtml(r) {
+  if (r.im) {
+    return `<img src="${r.im}" alt="" class="result-img" loading="lazy">`;
+  }
+  if (r.p === "kalshi") {
+    return `<div class="result-img provider-avatar kalshi-avatar" aria-hidden="true">${esc(categoryInitials(r))}</div>`;
+  }
+  return '<div class="result-img placeholder"></div>';
+}
+
+function categoryInitials(r) {
+  const label = (r.tg || []).find(Boolean) || "K";
+  const words = String(label).split(/\s+/).filter(Boolean);
+  if (!words.length) return "K";
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return words.slice(0, 2).map((word) => word[0]).join("").toUpperCase();
 }
 
 function renderSportCard(r, url) {
@@ -607,7 +730,10 @@ async function refreshLivePrices(results) {
   const ctrl = new AbortController();
   refreshAbort = ctrl;
 
-  const slugs = results.filter((r) => !r.ar).map((r) => r.s).filter(Boolean);
+  const slugs = results
+    .filter((r) => !r.ar && r.p !== "kalshi")
+    .map((r) => r.s)
+    .filter(Boolean);
   if (!slugs.length) return;
 
   try {
@@ -729,7 +855,41 @@ document.getElementById("theme-toggle").addEventListener("click", () => {
   );
 });
 
+providerToggle.addEventListener("click", async (e) => {
+  const button = e.target.closest(".provider-option");
+  if (!button) return;
+  const nextProvider = normalizeProvider(button.dataset.provider);
+  if (nextProvider === provider) return;
+
+  provider = nextProvider;
+  includeArchived = false;
+  archiveToggle.checked = false;
+  activeFilters = [];
+  syncProviderState();
+  setProviderUi();
+  syncFilterUrl();
+  syncProviderUrl();
+  selectedIdx = -1;
+  resultRenderToken++;
+  resultsEl.innerHTML = "";
+  updateStatus(`Loading ${activeProviderConfig().label}...`);
+
+  try {
+    await loadProviderData(provider);
+  } catch {
+    updateStatus(`Failed to load ${activeProviderConfig().label}`);
+    return;
+  }
+
+  syncProviderState();
+  setProviderUi();
+  updateStatus();
+  renderFilters();
+  updateResults();
+});
+
 archiveToggle.addEventListener("change", async () => {
+  if (!activeProviderConfig().supportsArchived) return;
   includeArchived = archiveToggle.checked;
   const url = new URL(window.location);
   if (includeArchived) {

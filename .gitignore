@@ -1,6 +1,7 @@
 node_modules/
 data/
 !data/enrichments.jsonl
+!data/kalshi_enrichments.jsonl
 .next/
 .env*
 *.db
@@ -9,5 +10,7 @@ public/search-data.json
 public/search-data.js
 public/search-data-archived.json
 public/search-data-archived.js
+public/search-data-kalshi.json
+public/search-data-kalshi.js
 worker/.wrangler/
 .playwright-mcp/

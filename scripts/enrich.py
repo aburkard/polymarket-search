@@ -6,6 +6,7 @@ can merge in.
 
 Usage:
     python scripts/enrich.py                    # enrich all unenriched events
+    python scripts/enrich.py --provider kalshi  # enrich Kalshi events
     python scripts/enrich.py --limit 50         # enrich up to 50 events
     python scripts/enrich.py --model google/gemini-3.1-pro-preview
     python scripts/enrich.py --dry-run          # show what would be enriched
@@ -21,8 +22,16 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
-ENRICHMENT_FILE = ROOT / "data" / "enrichments.jsonl"
-INDEX_FILE = ROOT / "public" / "search-data.json"
+PROVIDER_CONFIG = {
+    "polymarket": {
+        "enrichment_file": ROOT / "data" / "enrichments.jsonl",
+        "snapshot": ROOT / "data" / "events_active.jsonl",
+    },
+    "kalshi": {
+        "enrichment_file": ROOT / "data" / "kalshi_enrichments.jsonl",
+        "snapshot": ROOT / "data" / "kalshi_events_open.jsonl",
+    },
+}
 
 DEFAULT_MODEL = "deepseek/deepseek-v4-pro"
 
@@ -40,6 +49,13 @@ Rules:
 - SKIP any word already in the title, market questions, or tags — only add what's MISSING
 - 1-3 words per alias, 8-15 aliases total
 - Be specific to THIS event, not generic"""
+
+KALSHI_SYSTEM_PROMPT = SYSTEM_PROMPT + """
+
+Kalshi-specific rules:
+- Event tickers and series tickers are authoritative context. For example, KXMLB means MLB/baseball, KXNBA means NBA/basketball, KXNFL means NFL/football, KXNHL means NHL/hockey, KXWC means World Cup/soccer, and KXBTC means Bitcoin.
+- If a title is ambiguous, use the ticker context instead of guessing.
+- Do not add aliases for a different league, team, person, or event that is not supported by the ticker/title/market text."""
 
 SCHEMA = {
     "type": "json_schema",
@@ -72,10 +88,10 @@ def get_api_key() -> str:
     return key
 
 
-def load_existing_enrichments() -> dict[str, list[str]]:
+def load_existing_enrichments(path: Path) -> dict[str, list[str]]:
     enrichments: dict[str, list[str]] = {}
-    if ENRICHMENT_FILE.exists():
-        for line in ENRICHMENT_FILE.read_text().splitlines():
+    if path.exists():
+        for line in path.read_text().splitlines():
             if not line.strip():
                 continue
             entry = json.loads(line)
@@ -83,10 +99,9 @@ def load_existing_enrichments() -> dict[str, list[str]]:
     return enrichments
 
 
-def load_events_from_snapshot() -> list[dict]:
-    snapshot = ROOT / "data" / "events_active.jsonl"
+def load_events_from_snapshot(snapshot: Path) -> list[dict]:
     if not snapshot.exists():
-        print(f"No snapshot at {snapshot}. Run build-index.py first.", file=sys.stderr)
+        print(f"No snapshot at {snapshot}. Run the provider build first.", file=sys.stderr)
         sys.exit(1)
     events = []
     with snapshot.open() as f:
@@ -116,11 +131,94 @@ def build_user_message(ev: dict) -> str:
     return "\n".join(parts)
 
 
-def call_llm(user_msg: str, model: str, api_key: str) -> list[str]:
+def kalshi_slug(ev: dict) -> str:
+    return (ev.get("event_ticker") or ev.get("slug") or "").lower()
+
+
+def is_closed_market(market: dict) -> bool:
+    status = (market.get("status") or "").lower()
+    return bool(market.get("closed")) or status in {"closed", "settled", "expired", "finalized"}
+
+
+def market_volume(market: dict) -> float:
+    for key in ("volume", "volume_fp"):
+        value = market.get(key)
+        if value not in (None, ""):
+            return float(value or 0)
+    return 0.0
+
+
+def market_volume_24h(market: dict) -> float:
+    for key in ("volume24hr", "volume_24h_fp"):
+        value = market.get(key)
+        if value not in (None, ""):
+            return float(value or 0)
+    return 0.0
+
+
+def event_slug(ev: dict, provider: str) -> str:
+    if provider == "kalshi":
+        return kalshi_slug(ev)
+    return ev.get("slug", "")
+
+
+def active_markets(ev: dict) -> list[dict]:
+    return [m for m in (ev.get("markets") or []) if not is_closed_market(m)]
+
+
+def event_volume(ev: dict) -> float:
+    return sum(market_volume(m) for m in active_markets(ev))
+
+
+def event_volume_24h(ev: dict) -> float:
+    return sum(market_volume_24h(m) for m in active_markets(ev))
+
+
+def build_kalshi_user_message(ev: dict) -> str:
+    title = ev.get("title", "")
+    category = ev.get("category", "")
+    sub_title = ev.get("sub_title", "")
+    markets = active_markets(ev)
+    market_lines = []
+    for m in markets[:12]:
+        label = m.get("yes_sub_title") or m.get("subtitle") or m.get("title") or ""
+        question = m.get("title") or ""
+        if label and question and label != question:
+            market_lines.append(f"- {label}: {question}")
+        elif question:
+            market_lines.append(f"- {question}")
+
+    parts = [f"Event: {title}"]
+    if ev.get("event_ticker"):
+        parts.append(f"Event ticker: {ev.get('event_ticker')}")
+    if ev.get("series_ticker"):
+        parts.append(f"Series ticker: {ev.get('series_ticker')}")
+    if sub_title:
+        parts.append(f"Subtitle: {sub_title}")
+    if category:
+        parts.append(f"Category: {category}")
+    if market_lines:
+        parts.append("Markets:\n" + "\n".join(market_lines))
+    return "\n".join(parts)
+
+
+def user_message(ev: dict, provider: str) -> str:
+    if provider == "kalshi":
+        return build_kalshi_user_message(ev)
+    return build_user_message(ev)
+
+
+def call_llm(
+    user_msg: str,
+    model: str,
+    api_key: str,
+    *,
+    system_prompt: str = SYSTEM_PROMPT,
+) -> list[str]:
     body = {
         "model": model,
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_msg},
         ],
         "temperature": 1.0,
@@ -152,6 +250,7 @@ def call_llm(user_msg: str, model: str, api_key: str) -> list[str]:
 def main():
     import argparse
     parser = argparse.ArgumentParser()
+    parser.add_argument("--provider", choices=sorted(PROVIDER_CONFIG), default="polymarket")
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--dry-run", action="store_true")
@@ -162,28 +261,29 @@ def main():
         print("No OPENROUTER_API_KEY found", file=sys.stderr)
         sys.exit(1)
 
-    existing = load_existing_enrichments()
+    cfg = PROVIDER_CONFIG[args.provider]
+    enrichment_file = cfg["enrichment_file"]
+    existing = load_existing_enrichments(enrichment_file)
     print(f"Existing enrichments: {len(existing)}")
 
-    events = load_events_from_snapshot()
+    events = load_events_from_snapshot(cfg["snapshot"])
     print(f"Total events in snapshot: {len(events)}")
 
     to_enrich = []
     for ev in events:
-        slug = ev.get("slug", "")
+        slug = event_slug(ev, args.provider)
         if not slug:
             continue
         if slug in existing:
             continue
-        active = [m for m in (ev.get("markets") or []) if not m.get("closed")]
-        vol = sum(float(m.get("volume") or 0) for m in active)
-        vol24 = sum(float(m.get("volume24hr") or 0) for m in active)
+        vol = event_volume(ev)
+        vol24 = event_volume_24h(ev)
         if vol == 0 and vol24 == 0:
             continue
         to_enrich.append(ev)
 
     to_enrich.sort(
-        key=lambda e: sum(float(m.get("volume") or 0) for m in (e.get("markets") or [])),
+        key=event_volume,
         reverse=True,
     )
 
@@ -194,7 +294,7 @@ def main():
 
     if args.dry_run:
         for ev in to_enrich[:20]:
-            print(f"  {ev.get('slug', '')[:50]}")
+            print(f"  {event_slug(ev, args.provider)[:50]} {ev.get('title', '')[:80]}")
         if len(to_enrich) > 20:
             print(f"  ... +{len(to_enrich) - 20} more")
         return
@@ -202,19 +302,26 @@ def main():
     print(f"Model: {args.model}")
     print()
 
-    ENRICHMENT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    enrichment_file.parent.mkdir(parents=True, exist_ok=True)
     succeeded = 0
     failed = 0
     consecutive_failures = 0
     t0 = time.time()
 
-    with ENRICHMENT_FILE.open("a") as f:
+    with enrichment_file.open("a") as f:
         for i, ev in enumerate(to_enrich):
-            slug = ev.get("slug", "")
+            slug = event_slug(ev, args.provider)
             title = ev.get("title", "")
             try:
-                user_msg = build_user_message(ev)
-                aliases = call_llm(user_msg, args.model, api_key)
+                user_msg = user_message(ev, args.provider)
+                aliases = call_llm(
+                    user_msg,
+                    args.model,
+                    api_key,
+                    system_prompt=KALSHI_SYSTEM_PROMPT
+                    if args.provider == "kalshi"
+                    else SYSTEM_PROMPT,
+                )
                 entry = {"slug": slug, "aliases": aliases, "model": args.model}
                 f.write(json.dumps(entry) + "\n")
                 f.flush()
