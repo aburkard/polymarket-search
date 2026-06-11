@@ -58,6 +58,9 @@ jobs:
       - name: Build archived index
         run: python scripts/build-index.py --archived
 
+      - name: Build Kalshi index
+        run: python scripts/build-kalshi-index.py
+
       - name: Optimize index size
         run: python scripts/optimize_index.py
 

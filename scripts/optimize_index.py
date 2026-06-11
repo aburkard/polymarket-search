@@ -61,6 +61,9 @@ def optimize_file(index_file: Path, js_global: str) -> None:
             continue
         packed = {}
         for term, postings in data[tier].items():
+            if isinstance(postings, str):
+                packed[term] = postings
+                continue
             parts = []
             prev = 0
             for doc_idx, tf in postings:
@@ -100,3 +103,6 @@ if __name__ == "__main__":
     archived = PUBLIC / "search-data-archived.json"
     if archived.exists():
         optimize_file(archived, "__SDA__")
+    kalshi = PUBLIC / "search-data-kalshi.json"
+    if kalshi.exists():
+        optimize_file(kalshi, "__SDK__")

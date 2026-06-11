@@ -2,6 +2,7 @@ import { prepareIndex, searchMany, topByVolumeMany } from "../../public/search.j
 
 const INDEX_URL = "https://aburkard.github.io/polymarket-search/search-data.json";
 const ARCHIVED_INDEX_URL = "https://aburkard.github.io/polymarket-search/search-data-archived.json";
+const KALSHI_INDEX_URL = "https://aburkard.github.io/polymarket-search/search-data-kalshi.json";
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 const caches = new Map();
@@ -59,6 +60,10 @@ function indexMeta(data) {
   };
 }
 
+function normalizeProvider(value) {
+  return value === "kalshi" ? "kalshi" : "polymarket";
+}
+
 function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body, null, 2), {
     status,
@@ -97,18 +102,20 @@ export default {
     // No query params at all: return API info
     if (!query && !url.searchParams.has("limit") && !url.searchParams.has("trending")) {
       return jsonResponse({
-        name: "polymarket-search",
-        description: "JSON search API for Polymarket prediction markets",
+        name: "market-search",
+        description: "JSON search API for Polymarket and Kalshi prediction markets",
         usage: {
           search: `${url.origin}/?q=YOUR_QUERY`,
+          kalshiSearch: `${url.origin}/?q=YOUR_QUERY&provider=kalshi`,
           trending: `${url.origin}/?trending=1&limit=20`,
           archivedSearch: `${url.origin}/?q=YOUR_QUERY&archived=1`,
         },
         parameters: {
           q: "search query string. Supports typos, abbreviations, nicknames.",
+          provider: "market source. Use kalshi for Kalshi; defaults to polymarket.",
           limit: "number of results (default 20, max 100)",
           trending: "set to any value to fetch top events by volume (when q is empty)",
-          archived: "set to 1/true/yes to include resolved archived markets",
+          archived: "set to 1/true/yes to include resolved archived Polymarket markets",
         },
         responseMeta: {
           indexes: "active and archived index build timestamps/event counts when data is returned; Worker results use bundled index prices",
@@ -119,9 +126,11 @@ export default {
     }
 
     try {
+      const provider = normalizeProvider(url.searchParams.get("provider"));
       const includeArchived =
-        parseBoolParam(url, "archived") || parseBoolParam(url, "include_archived");
-      const data = await loadIndex(INDEX_URL);
+        provider === "polymarket" &&
+        (parseBoolParam(url, "archived") || parseBoolParam(url, "include_archived"));
+      const data = await loadIndex(provider === "kalshi" ? KALSHI_INDEX_URL : INDEX_URL);
       const archivedData = includeArchived
         ? await loadIndex(ARCHIVED_INDEX_URL)
         : null;
@@ -140,6 +149,7 @@ export default {
 
       return jsonResponse({
         query: query || null,
+        provider,
         archived: includeArchived,
         count: results.length,
         meta: {

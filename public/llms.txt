@@ -1,6 +1,6 @@
-# Polymarket Search
+# Market Search
 
-Search engine for Polymarket prediction markets. Better ranking than Polymarket's built-in search (BM25 + volume + LLM-enriched aliases + fuzzy matching). Static site, data refreshes every 30 minutes.
+Search engine for Polymarket and Kalshi prediction markets. Better ranking than the built-in market search (BM25 + volume + LLM-enriched aliases + fuzzy matching). Static site, data refreshes every 30 minutes.
 
 ## JSON API (recommended for agents)
 
@@ -15,20 +15,25 @@ Examples:
 ```
 curl 'https://polymarket-search-api.wkr0.workers.dev/?q=canada'
 curl 'https://polymarket-search-api.wkr0.workers.dev/?q=bitcoin&limit=5'
+curl 'https://polymarket-search-api.wkr0.workers.dev/?q=bitcoin&provider=kalshi&limit=5'
 curl 'https://polymarket-search-api.wkr0.workers.dev/?trending=1&limit=10'
 ```
 
 ### Parameters
 
 - `q` (string) — search query. Supports typos, abbreviations, nicknames.
+- `provider` (string) — market source. Use `kalshi` for Kalshi; defaults to `polymarket`.
 - `limit` (int, default 20, max 100) — number of results.
 - `trending` (any value) — when `q` is empty, return top events by volume.
+- `archived` (bool) — set to `1` to include archived Polymarket markets. Kalshi search currently indexes open events only.
 
 ### Response shape
 
 ```json
 {
   "query": "canada",
+  "provider": "polymarket",
+  "archived": false,
   "count": 5,
   "meta": {
     "indexes": {
@@ -65,7 +70,9 @@ Field reference:
 - `meta.indexes.active.events` — active index event count
 - `meta.indexes.archived` — archived index timestamp/count when `archived=1`, otherwise null
 - `q` — event title
-- `s` — Polymarket event slug. URL: `https://polymarket.com/event/{slug}`
+- `p` — provider. Present as `kalshi` on Kalshi results; absent/undefined means Polymarket.
+- `s` — provider event id/slug. Polymarket URL: `https://polymarket.com/event/{slug}`.
+- `u` — direct URL when present. Kalshi results include this.
 - `ed` — end date (YYYY-MM-DD)
 - `im` — event image URL
 - `v` — 24h volume in USD
@@ -88,7 +95,7 @@ This requires a JS-capable fetcher (headless browser, Playwright, Puppeteer) bec
 
 ## Data refresh
 
-Index rebuilds every 30 minutes via GitHub Actions. `meta.indexes.*.updatedAt` is the index build timestamp, not a live price-refresh timestamp. Live prices for displayed active results are fetched from Polymarket's Gamma API on demand by the browser UI only. Archived results and Worker/API responses use the bundled index prices.
+Index rebuilds every 30 minutes via GitHub Actions. `meta.indexes.*.updatedAt` is the index build timestamp, not a live price-refresh timestamp. Live prices for displayed active Polymarket results are fetched from Polymarket's Gamma API on demand by the browser UI only. Kalshi results, archived results, and Worker/API responses use bundled index prices.
 
 ## Source
 
