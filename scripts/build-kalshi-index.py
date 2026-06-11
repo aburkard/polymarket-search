@@ -7,8 +7,10 @@ import concurrent.futures
 import http.client
 import json
 import sys
+import threading
 import time
 import urllib.parse
+import urllib.error
 import urllib.request
 from importlib import import_module
 from pathlib import Path
@@ -26,8 +28,9 @@ ENRICHMENT_FILE = Path(__file__).parent.parent / "data" / "kalshi_enrichments.js
 
 USER_AGENT = "polymarket-search-indexer/0.1 (andrewburkard@gmail.com)"
 API_PAGE_SIZE = 200
-METADATA_WORKERS = 2
-METADATA_RETRIES = 4
+METADATA_WORKERS = 1
+METADATA_RETRIES = 6
+METADATA_MIN_INTERVAL = 0.5
 
 KALSHI_TOPIC_HINTS = [
     ("KXBTC", ["Crypto", "Bitcoin"], ["btc", "bitcoin", "btcusd", "xbt", "satoshi"]),
@@ -127,10 +130,16 @@ def fetch_event_metadata(event_ticker: str) -> dict:
     return _request_json(f"/events/{ticker}/metadata")
 
 
-def fetch_event_metadata_with_retry(event_ticker: str) -> dict:
-    delay = 1.0
+def fetch_event_metadata_with_retry(
+    event_ticker: str,
+    *,
+    rate_limit: "MetadataRateLimit | None" = None,
+) -> dict:
+    delay = 10.0
     for attempt in range(METADATA_RETRIES + 1):
         try:
+            if rate_limit:
+                rate_limit.wait()
             return fetch_event_metadata(event_ticker)
         except urllib.error.HTTPError as e:
             if e.code != http.client.TOO_MANY_REQUESTS or attempt >= METADATA_RETRIES:
@@ -146,24 +155,48 @@ def fetch_event_metadata_with_retry(event_ticker: str) -> dict:
     raise RuntimeError(f"metadata retries exhausted for {event_ticker}")
 
 
+class MetadataRateLimit:
+    def __init__(self, min_interval: float) -> None:
+        self.min_interval = max(min_interval, 0)
+        self.lock = threading.Lock()
+        self.last_request = 0.0
+
+    def wait(self) -> None:
+        if self.min_interval <= 0:
+            return
+        with self.lock:
+            now = time.monotonic()
+            wait_for = self.min_interval - (now - self.last_request)
+            if wait_for > 0:
+                time.sleep(wait_for)
+            self.last_request = time.monotonic()
+
+
 def fetch_event_metadata_map(
     events: list[dict],
     *,
+    existing_metadata: dict[str, dict] | None = None,
     max_workers: int = METADATA_WORKERS,
+    min_interval: float = METADATA_MIN_INTERVAL,
 ) -> dict[str, dict]:
-    tickers = sorted({
+    all_tickers = sorted({
         event.get("event_ticker") or ""
         for event in events
         if event.get("event_ticker")
     })
-    metadata: dict[str, dict] = {}
+    metadata: dict[str, dict] = dict(existing_metadata or {})
+    tickers = [ticker for ticker in all_tickers if ticker not in metadata]
     failures = 0
     if not tickers:
+        print(f"  Metadata cache covers all {len(all_tickers)} events")
         return metadata
+
+    print(f"  Fetching metadata for {len(tickers)} missing events ({len(metadata)} cached)")
+    rate_limit = MetadataRateLimit(min_interval)
 
     def fetch_one(ticker: str) -> tuple[str, dict | None, str | None]:
         try:
-            return ticker, fetch_event_metadata_with_retry(ticker), None
+            return ticker, fetch_event_metadata_with_retry(ticker, rate_limit=rate_limit), None
         except Exception as e:
             return ticker, None, str(e)
 
@@ -178,7 +211,7 @@ def fetch_event_metadata_map(
                 if failures <= 5:
                     print(f"  metadata skipped for {ticker}: {error}", file=sys.stderr)
             if i % 200 == 0 or i == len(tickers):
-                print(f"  fetched metadata {i}/{len(tickers)}")
+                print(f"  fetched metadata {i}/{len(tickers)} missing ({len(metadata)}/{len(all_tickers)} cached)")
 
     if failures:
         print(f"  Metadata unavailable for {failures}/{len(tickers)} events", file=sys.stderr)
@@ -421,6 +454,22 @@ def main() -> None:
         default=METADATA_WORKERS,
         help="Concurrent workers for Kalshi metadata/image fetching",
     )
+    parser.add_argument(
+        "--metadata-min-interval",
+        type=float,
+        default=METADATA_MIN_INTERVAL,
+        help="Minimum seconds between Kalshi metadata requests across all workers",
+    )
+    parser.add_argument(
+        "--refresh-metadata",
+        action="store_true",
+        help="Refetch metadata for all events instead of using the local metadata cache",
+    )
+    parser.add_argument(
+        "--metadata-cache-only",
+        action="store_true",
+        help="Use the local metadata cache but do not fetch missing metadata",
+    )
     args = parser.parse_args()
 
     print("Building Kalshi search index...")
@@ -441,12 +490,25 @@ def main() -> None:
     metadata_by_event: dict[str, dict] = {}
     if args.skip_metadata:
         print("  Skipping Kalshi metadata")
-    elif args.local and METADATA_SNAPSHOT.exists():
-        print(f"  Loading metadata from local file: {METADATA_SNAPSHOT}")
-        metadata_by_event = load_metadata_snapshot()
+    elif args.metadata_cache_only:
+        if METADATA_SNAPSHOT.exists():
+            print(f"  Loading metadata cache: {METADATA_SNAPSHOT}")
+            metadata_by_event = load_metadata_snapshot()
+            print(f"  Cached metadata events: {len(metadata_by_event)}")
+        else:
+            print(f"  Metadata cache not found: {METADATA_SNAPSHOT}", file=sys.stderr)
     else:
+        if METADATA_SNAPSHOT.exists() and not args.refresh_metadata:
+            print(f"  Loading metadata cache: {METADATA_SNAPSHOT}")
+            metadata_by_event = load_metadata_snapshot()
+            print(f"  Cached metadata events: {len(metadata_by_event)}")
         print("  Fetching Kalshi metadata...")
-        metadata_by_event = fetch_event_metadata_map(events, max_workers=args.metadata_workers)
+        metadata_by_event = fetch_event_metadata_map(
+            events,
+            existing_metadata=metadata_by_event,
+            max_workers=args.metadata_workers,
+            min_interval=args.metadata_min_interval,
+        )
         save_metadata_snapshot(metadata_by_event)
         print(f"  Saved metadata snapshot: {METADATA_SNAPSHOT}")
 

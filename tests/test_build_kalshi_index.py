@@ -6,6 +6,7 @@ import sys
 import unittest
 from importlib import import_module
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
@@ -13,6 +14,7 @@ kalshi_mod = import_module("build-kalshi-index")
 normalize_event = kalshi_mod.normalize_event
 normalize_events = kalshi_mod.normalize_events
 attach_kalshi_fields = kalshi_mod.attach_kalshi_fields
+fetch_event_metadata_map = kalshi_mod.fetch_event_metadata_map
 kalshi_topic_metadata = kalshi_mod.kalshi_topic_metadata
 build_index = kalshi_mod.build_index
 
@@ -185,6 +187,42 @@ class TestBuildKalshiIndex(unittest.TestCase):
         self.assertEqual(doc["mc"], 2)
         total = sum(m["op"][0] for m in doc["mk"])
         self.assertAlmostEqual(total, 1.0, places=2)
+
+    def test_metadata_fetch_reuses_cache_and_fetches_missing(self):
+        cached = {"KXBTC-26JUN": SAMPLE_KALSHI_METADATA}
+        missing_event = {
+            **SAMPLE_KALSHI_EVENT,
+            "event_ticker": "KXBTC-26JUL",
+            "markets": [{**SAMPLE_KALSHI_EVENT["markets"][0], "ticker": "KXBTC-26JUL-T100000"}],
+        }
+        fetched = {"image_url": "https://example.com/july.webp", "market_details": []}
+
+        with patch.object(kalshi_mod, "fetch_event_metadata_with_retry", return_value=fetched) as fetch_one:
+            metadata = fetch_event_metadata_map(
+                [SAMPLE_KALSHI_EVENT, missing_event],
+                existing_metadata=cached,
+                max_workers=1,
+                min_interval=0,
+            )
+
+        fetch_one.assert_called_once()
+        self.assertEqual(fetch_one.call_args.args[0], "KXBTC-26JUL")
+        self.assertEqual(metadata["KXBTC-26JUN"], SAMPLE_KALSHI_METADATA)
+        self.assertEqual(metadata["KXBTC-26JUL"], fetched)
+
+    def test_metadata_fetch_skips_network_when_cache_is_complete(self):
+        cached = {"KXBTC-26JUN": SAMPLE_KALSHI_METADATA}
+
+        with patch.object(kalshi_mod, "fetch_event_metadata_with_retry") as fetch_one:
+            metadata = fetch_event_metadata_map(
+                [SAMPLE_KALSHI_EVENT],
+                existing_metadata=cached,
+                max_workers=1,
+                min_interval=0,
+            )
+
+        fetch_one.assert_not_called()
+        self.assertEqual(metadata, cached)
 
 
 if __name__ == "__main__":
