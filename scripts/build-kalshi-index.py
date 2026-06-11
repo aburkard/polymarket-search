@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import http.client
 import json
 import sys
 import time
@@ -25,7 +26,8 @@ ENRICHMENT_FILE = Path(__file__).parent.parent / "data" / "kalshi_enrichments.js
 
 USER_AGENT = "polymarket-search-indexer/0.1 (andrewburkard@gmail.com)"
 API_PAGE_SIZE = 200
-METADATA_WORKERS = 8
+METADATA_WORKERS = 2
+METADATA_RETRIES = 4
 
 KALSHI_TOPIC_HINTS = [
     ("KXBTC", ["Crypto", "Bitcoin"], ["btc", "bitcoin", "btcusd", "xbt", "satoshi"]),
@@ -125,6 +127,25 @@ def fetch_event_metadata(event_ticker: str) -> dict:
     return _request_json(f"/events/{ticker}/metadata")
 
 
+def fetch_event_metadata_with_retry(event_ticker: str) -> dict:
+    delay = 1.0
+    for attempt in range(METADATA_RETRIES + 1):
+        try:
+            return fetch_event_metadata(event_ticker)
+        except urllib.error.HTTPError as e:
+            if e.code != http.client.TOO_MANY_REQUESTS or attempt >= METADATA_RETRIES:
+                raise
+            retry_after = e.headers.get("Retry-After")
+            if retry_after:
+                try:
+                    delay = max(delay, float(retry_after))
+                except ValueError:
+                    pass
+            time.sleep(delay)
+            delay *= 2
+    raise RuntimeError(f"metadata retries exhausted for {event_ticker}")
+
+
 def fetch_event_metadata_map(
     events: list[dict],
     *,
@@ -142,7 +163,7 @@ def fetch_event_metadata_map(
 
     def fetch_one(ticker: str) -> tuple[str, dict | None, str | None]:
         try:
-            return ticker, fetch_event_metadata(ticker), None
+            return ticker, fetch_event_metadata_with_retry(ticker), None
         except Exception as e:
             return ticker, None, str(e)
 
