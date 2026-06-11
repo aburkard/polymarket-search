@@ -36,6 +36,7 @@ jobs:
 
       - name: Enrich new events
         if: env.HAS_API_KEY == 'true'
+        continue-on-error: true
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: python scripts/enrich.py --limit 100
@@ -45,6 +46,7 @@ jobs:
 
       - name: Enrich new Kalshi events
         if: env.HAS_API_KEY == 'true'
+        continue-on-error: true
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: python scripts/enrich.py --provider kalshi --limit 100
