@@ -50,6 +50,13 @@ Rules:
 - 1-3 words per alias, 8-15 aliases total
 - Be specific to THIS event, not generic"""
 
+KALSHI_SYSTEM_PROMPT = SYSTEM_PROMPT + """
+
+Kalshi-specific rules:
+- Event tickers and series tickers are authoritative context. For example, KXMLB means MLB/baseball, KXNBA means NBA/basketball, KXNFL means NFL/football, KXNHL means NHL/hockey, KXWC means World Cup/soccer, and KXBTC means Bitcoin.
+- If a title is ambiguous, use the ticker context instead of guessing.
+- Do not add aliases for a different league, team, person, or event that is not supported by the ticker/title/market text."""
+
 SCHEMA = {
     "type": "json_schema",
     "json_schema": {
@@ -182,6 +189,10 @@ def build_kalshi_user_message(ev: dict) -> str:
             market_lines.append(f"- {question}")
 
     parts = [f"Event: {title}"]
+    if ev.get("event_ticker"):
+        parts.append(f"Event ticker: {ev.get('event_ticker')}")
+    if ev.get("series_ticker"):
+        parts.append(f"Series ticker: {ev.get('series_ticker')}")
     if sub_title:
         parts.append(f"Subtitle: {sub_title}")
     if category:
@@ -197,11 +208,17 @@ def user_message(ev: dict, provider: str) -> str:
     return build_user_message(ev)
 
 
-def call_llm(user_msg: str, model: str, api_key: str) -> list[str]:
+def call_llm(
+    user_msg: str,
+    model: str,
+    api_key: str,
+    *,
+    system_prompt: str = SYSTEM_PROMPT,
+) -> list[str]:
     body = {
         "model": model,
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_msg},
         ],
         "temperature": 1.0,
@@ -297,7 +314,14 @@ def main():
             title = ev.get("title", "")
             try:
                 user_msg = user_message(ev, args.provider)
-                aliases = call_llm(user_msg, args.model, api_key)
+                aliases = call_llm(
+                    user_msg,
+                    args.model,
+                    api_key,
+                    system_prompt=KALSHI_SYSTEM_PROMPT
+                    if args.provider == "kalshi"
+                    else SYSTEM_PROMPT,
+                )
                 entry = {"slug": slug, "aliases": aliases, "model": args.model}
                 f.write(json.dumps(entry) + "\n")
                 f.flush()

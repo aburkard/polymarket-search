@@ -24,6 +24,30 @@ ENRICHMENT_FILE = Path(__file__).parent.parent / "data" / "kalshi_enrichments.js
 USER_AGENT = "polymarket-search-indexer/0.1 (andrewburkard@gmail.com)"
 API_PAGE_SIZE = 200
 
+KALSHI_TOPIC_HINTS = [
+    ("KXBTC", ["Crypto", "Bitcoin"], ["btc", "bitcoin", "btcusd", "xbt", "satoshi"]),
+    ("KXETH", ["Crypto", "Ethereum"], ["eth", "ethereum", "ether"]),
+    ("KXSOL", ["Crypto", "Solana"], ["sol", "solana"]),
+    ("KXXRP", ["Crypto", "XRP"], ["xrp", "ripple"]),
+    ("KXMLB", ["Sports", "MLB", "Baseball"], ["mlb", "baseball"]),
+    ("KXNBA", ["Sports", "NBA", "Basketball"], ["nba", "basketball"]),
+    ("KXNFL", ["Sports", "NFL", "Football"], ["nfl", "football"]),
+    ("KXNHL", ["Sports", "NHL", "Hockey"], ["nhl", "hockey"]),
+    ("KXUFC", ["Sports", "UFC", "MMA"], ["ufc", "mma"]),
+    ("KXPGATOUR", ["Sports", "Golf", "PGA"], ["pga", "golf"]),
+    ("KXF1", ["Sports", "Formula 1"], ["f1", "formula one", "formula 1"]),
+    ("KXWC", ["Sports", "Soccer", "World Cup", "FIFA"], ["world cup", "fifa", "soccer", "football"]),
+    ("KXNCAAF", ["Sports", "College Football"], ["college football", "ncaa football", "cfb"]),
+    ("KXNCAABASEBALL", ["Sports", "College Baseball"], ["college baseball", "college world series", "cws", "omaha"]),
+    ("KXMARMAD", ["Sports", "College Basketball"], ["march madness", "college basketball", "ncaa basketball"]),
+    ("KXHEISMAN", ["Sports", "College Football"], ["heisman", "college football", "cfb"]),
+    ("KXFED", ["Economics", "Fed"], ["fed", "fomc", "interest rates", "rate decision"]),
+    ("KXRATE", ["Economics", "Fed"], ["fed", "fomc", "rate cuts", "interest rates"]),
+    ("KXPRES", ["Politics", "Elections"], ["president", "presidential election"]),
+    ("CONTROLH", ["Politics", "Elections"], ["house control", "midterms", "congress"]),
+    ("CONTROLS", ["Politics", "Elections"], ["senate control", "midterms", "congress"]),
+]
+
 
 def _request_json(path: str, params: dict[str, Any]) -> dict:
     qs = urllib.parse.urlencode(params)
@@ -147,6 +171,32 @@ def _market_label(event: dict, market: dict, market_count: int) -> str:
     return label
 
 
+def _unique(values: list[str]) -> list[str]:
+    seen = set()
+    result = []
+    for value in values:
+        value = value.strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
+
+
+def kalshi_topic_metadata(event: dict) -> tuple[list[str], list[str]]:
+    ticker_text = " ".join(
+        str(event.get(key) or "").upper()
+        for key in ("event_ticker", "series_ticker")
+    )
+    tags: list[str] = []
+    aliases: list[str] = []
+    for prefix, prefix_tags, prefix_aliases in KALSHI_TOPIC_HINTS:
+        if prefix in ticker_text:
+            tags.extend(prefix_tags)
+            aliases.extend(prefix_aliases)
+    return _unique(tags), _unique(aliases)
+
+
 def normalize_event(event: dict) -> dict | None:
     markets = []
     for market in event.get("markets") or []:
@@ -181,8 +231,16 @@ def normalize_event(event: dict) -> dict | None:
         return None
 
     category = event.get("category") or ""
-    tags = [{"label": category}] if category else []
+    topic_tags, topic_aliases = kalshi_topic_metadata(event)
+    tag_labels = _unique(([category] if category else []) + topic_tags)
+    tags = [{"label": tag} for tag in tag_labels]
     event_ticker = event.get("event_ticker") or ""
+    context_aliases = _unique([
+        event.get("event_ticker") or "",
+        event.get("series_ticker") or "",
+        event.get("sub_title") or "",
+        *topic_aliases,
+    ])
 
     return {
         "id": event_ticker,
@@ -194,6 +252,9 @@ def normalize_event(event: dict) -> dict | None:
         "markets": markets,
         "negRisk": bool(event.get("mutually_exclusive")),
         "enableNegRisk": bool(event.get("mutually_exclusive")),
+        "eventMetadata": {
+            "context_description": " ".join(context_aliases),
+        },
         "source": "kalshi",
         "url": _event_url(event),
     }

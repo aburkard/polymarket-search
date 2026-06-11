@@ -24,6 +24,8 @@ class TestKalshiEnrichmentHelpers(unittest.TestCase):
 
     def test_builds_kalshi_prompt_from_category_and_market_labels(self):
         event = {
+            "event_ticker": "KXMLBGAME-26JUN101840MINDET",
+            "series_ticker": "KXMLBGAME",
             "title": "2026 Men's World Cup Winner",
             "category": "Sports",
             "sub_title": "Winner",
@@ -38,6 +40,8 @@ class TestKalshiEnrichmentHelpers(unittest.TestCase):
 
         msg = enrich.user_message(event, "kalshi")
         self.assertIn("Event: 2026 Men's World Cup Winner", msg)
+        self.assertIn("Event ticker: KXMLBGAME-26JUN101840MINDET", msg)
+        self.assertIn("Series ticker: KXMLBGAME", msg)
         self.assertIn("Category: Sports", msg)
         self.assertIn("Spain: Will Spain win the 2026 World Cup?", msg)
 

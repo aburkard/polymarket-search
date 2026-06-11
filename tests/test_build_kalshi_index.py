@@ -13,6 +13,7 @@ kalshi_mod = import_module("build-kalshi-index")
 normalize_event = kalshi_mod.normalize_event
 normalize_events = kalshi_mod.normalize_events
 attach_kalshi_fields = kalshi_mod.attach_kalshi_fields
+kalshi_topic_metadata = kalshi_mod.kalshi_topic_metadata
 build_index = kalshi_mod.build_index
 
 
@@ -83,7 +84,7 @@ class TestNormalizeKalshiEvent(unittest.TestCase):
         assert event is not None
         self.assertEqual(event["title"], "Bitcoin above $100,000 on Jun 30?")
         self.assertEqual(event["slug"], "kxbtc-26jun")
-        self.assertEqual(event["tags"], [{"label": "Crypto"}])
+        self.assertEqual(event["tags"], [{"label": "Crypto"}, {"label": "Bitcoin"}])
         self.assertEqual(event["url"], "https://kalshi.com/markets/kxbtc")
         self.assertEqual(event["endDate"], "2026-06-30T16:00:00Z")
 
@@ -122,8 +123,22 @@ class TestBuildKalshiIndex(unittest.TestCase):
         self.assertEqual(doc["u"], "https://kalshi.com/markets/kxbtc")
         self.assertEqual(doc["ed"], "2026-06-30")
         self.assertIn("Crypto", doc["tg"])
+        self.assertIn("Bitcoin", doc["tg"])
         self.assertIn("bitcoin", data["idx"])
         self.assertIn("100000", data["idx"])
+
+    def test_adds_topic_metadata_from_kalshi_ticker(self):
+        event = {
+            "event_ticker": "KXMLBGAME-26JUN101840MINDET",
+            "series_ticker": "KXMLBGAME",
+        }
+
+        tags, aliases = kalshi_topic_metadata(event)
+
+        self.assertIn("MLB", tags)
+        self.assertIn("Baseball", tags)
+        self.assertIn("mlb", aliases)
+        self.assertIn("baseball", aliases)
 
     def test_mutually_exclusive_prices_are_normalized_by_shared_builder(self):
         events = normalize_events([EXCLUSIVE_KALSHI_EVENT])
