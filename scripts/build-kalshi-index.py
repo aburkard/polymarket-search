@@ -315,12 +315,20 @@ def kalshi_topic_metadata(event: dict) -> tuple[list[str], list[str]]:
         str(event.get(key) or "").upper()
         for key in ("event_ticker", "series_ticker")
     )
+    title = str(event.get("title") or "").lower()
     tags: list[str] = []
     aliases: list[str] = []
     for prefix, prefix_tags, prefix_aliases in KALSHI_TOPIC_HINTS:
         if prefix in ticker_text:
             tags.extend(prefix_tags)
             aliases.extend(prefix_aliases)
+    if "KXNBA" in ticker_text and "finals series winner" in title:
+        aliases.extend([
+            "nba champion",
+            "nba championship",
+            "pro basketball champion",
+            "pro basketball championship",
+        ])
     return _unique(tags), _unique(aliases)
 
 

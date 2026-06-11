@@ -179,6 +179,23 @@ class TestBuildKalshiIndex(unittest.TestCase):
         self.assertIn("mlb", aliases)
         self.assertIn("baseball", aliases)
 
+    def test_adds_champion_alias_for_nba_finals_winner(self):
+        event = {
+            **EXCLUSIVE_KALSHI_EVENT,
+            "event_ticker": "KXNBA-26",
+            "series_ticker": "KXNBA",
+            "title": "Finals Series Winner: New York vs San Antonio",
+        }
+
+        tags, aliases = kalshi_topic_metadata(event)
+        normalized = normalize_events([event])
+        data = build_index(normalized)
+
+        self.assertIn("NBA", tags)
+        self.assertIn("Basketball", tags)
+        self.assertIn("nba champion", aliases)
+        self.assertIn("champion", data["ctx"])
+
     def test_mutually_exclusive_prices_are_normalized_by_shared_builder(self):
         events = normalize_events([EXCLUSIVE_KALSHI_EVENT])
         data = build_index(events)
