@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json
 import sys
 import time
@@ -19,10 +20,12 @@ BASE = "https://external-api.kalshi.com/trade-api/v2"
 PUBLIC = Path(__file__).parent.parent / "public"
 OUT = PUBLIC / "search-data-kalshi.json"
 SNAPSHOT = Path(__file__).parent.parent / "data" / "kalshi_events_open.jsonl"
+METADATA_SNAPSHOT = Path(__file__).parent.parent / "data" / "kalshi_event_metadata_open.jsonl"
 ENRICHMENT_FILE = Path(__file__).parent.parent / "data" / "kalshi_enrichments.jsonl"
 
 USER_AGENT = "polymarket-search-indexer/0.1 (andrewburkard@gmail.com)"
 API_PAGE_SIZE = 200
+METADATA_WORKERS = 8
 
 KALSHI_TOPIC_HINTS = [
     ("KXBTC", ["Crypto", "Bitcoin"], ["btc", "bitcoin", "btcusd", "xbt", "satoshi"]),
@@ -49,9 +52,11 @@ KALSHI_TOPIC_HINTS = [
 ]
 
 
-def _request_json(path: str, params: dict[str, Any]) -> dict:
-    qs = urllib.parse.urlencode(params)
-    url = f"{BASE}{path}?{qs}"
+def _request_json(path: str, params: dict[str, Any] | None = None) -> dict:
+    qs = urllib.parse.urlencode(params or {})
+    url = f"{BASE}{path}"
+    if qs:
+        url = f"{url}?{qs}"
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     with urllib.request.urlopen(req, timeout=60) as resp:
         return json.loads(resp.read())
@@ -113,6 +118,74 @@ def load_local_events(path: str) -> list[dict]:
             if line.strip():
                 events.append(json.loads(line))
     return events
+
+
+def fetch_event_metadata(event_ticker: str) -> dict:
+    ticker = urllib.parse.quote(event_ticker, safe="")
+    return _request_json(f"/events/{ticker}/metadata")
+
+
+def fetch_event_metadata_map(
+    events: list[dict],
+    *,
+    max_workers: int = METADATA_WORKERS,
+) -> dict[str, dict]:
+    tickers = sorted({
+        event.get("event_ticker") or ""
+        for event in events
+        if event.get("event_ticker")
+    })
+    metadata: dict[str, dict] = {}
+    failures = 0
+    if not tickers:
+        return metadata
+
+    def fetch_one(ticker: str) -> tuple[str, dict | None, str | None]:
+        try:
+            return ticker, fetch_event_metadata(ticker), None
+        except Exception as e:
+            return ticker, None, str(e)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(fetch_one, ticker) for ticker in tickers]
+        for i, future in enumerate(concurrent.futures.as_completed(futures), start=1):
+            ticker, item, error = future.result()
+            if item:
+                metadata[ticker] = item
+            else:
+                failures += 1
+                if failures <= 5:
+                    print(f"  metadata skipped for {ticker}: {error}", file=sys.stderr)
+            if i % 200 == 0 or i == len(tickers):
+                print(f"  fetched metadata {i}/{len(tickers)}")
+
+    if failures:
+        print(f"  Metadata unavailable for {failures}/{len(tickers)} events", file=sys.stderr)
+    return metadata
+
+
+def load_metadata_snapshot(path: Path = METADATA_SNAPSHOT) -> dict[str, dict]:
+    metadata: dict[str, dict] = {}
+    if not path.exists():
+        return metadata
+    with path.open() as f:
+        for line in f:
+            if not line.strip():
+                continue
+            entry = json.loads(line)
+            ticker = entry.get("event_ticker") or ""
+            item = entry.get("metadata") or {}
+            if ticker and item:
+                metadata[ticker] = item
+    return metadata
+
+
+def save_metadata_snapshot(metadata: dict[str, dict], path: Path = METADATA_SNAPSHOT) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w") as f:
+        for ticker in sorted(metadata):
+            entry = {"event_ticker": ticker, "metadata": metadata[ticker]}
+            f.write(json.dumps(entry, separators=(",", ":")) + "\n")
 
 
 def _float(value: Any, default: float = 0.0) -> float:
@@ -197,9 +270,30 @@ def kalshi_topic_metadata(event: dict) -> tuple[list[str], list[str]]:
     return _unique(tags), _unique(aliases)
 
 
-def normalize_event(event: dict) -> dict | None:
+def _image_url(value: Any) -> str:
+    if not value:
+        return ""
+    url = str(value)
+    if url.startswith("http://") or url.startswith("https://"):
+        return url
+    if url.startswith("//"):
+        return f"https:{url}"
+    if url.startswith("/"):
+        return f"https://kalshi.com{url}"
+    return url
+
+
+def normalize_event(event: dict, metadata: dict | None = None) -> dict | None:
+    metadata = metadata or {}
+    market_images = {
+        detail.get("market_ticker"): _image_url(detail.get("image_url"))
+        for detail in metadata.get("market_details") or []
+        if detail.get("market_ticker") and detail.get("image_url")
+    }
+
     markets = []
     for market in event.get("markets") or []:
+        market_ticker = market.get("ticker") or ""
         status = (market.get("status") or "").lower()
         closed = status in {"closed", "settled", "expired", "finalized"}
         volume = _float(market.get("volume_fp"))
@@ -207,9 +301,9 @@ def normalize_event(event: dict) -> dict | None:
         probability = _yes_probability(market)
 
         markets.append({
-            "id": market.get("ticker") or "",
+            "id": market_ticker,
             "question": market.get("title") or event.get("title") or "",
-            "slug": (market.get("ticker") or "").lower(),
+            "slug": market_ticker.lower(),
             "closed": closed,
             "volume": str(volume),
             "volume24hr": str(volume24),
@@ -224,7 +318,7 @@ def normalize_event(event: dict) -> dict | None:
             "bestBid": market.get("yes_bid_dollars"),
             "bestAsk": market.get("yes_ask_dollars"),
             "lastTradePrice": market.get("last_price_dollars"),
-            "image": "",
+            "image": market_images.get(market_ticker, ""),
         })
 
     if not markets:
@@ -247,7 +341,7 @@ def normalize_event(event: dict) -> dict | None:
         "title": event.get("title") or event_ticker,
         "slug": event_ticker.lower(),
         "endDate": _event_end_date(event.get("markets") or [], event),
-        "image": "",
+        "image": _image_url(metadata.get("image_url") or metadata.get("featured_image_url")),
         "tags": tags,
         "markets": markets,
         "negRisk": bool(event.get("mutually_exclusive")),
@@ -260,10 +354,11 @@ def normalize_event(event: dict) -> dict | None:
     }
 
 
-def normalize_events(events: list[dict]) -> list[dict]:
+def normalize_events(events: list[dict], metadata_by_event: dict[str, dict] | None = None) -> list[dict]:
+    metadata_by_event = metadata_by_event or {}
     normalized = []
     for event in events:
-        item = normalize_event(event)
+        item = normalize_event(event, metadata_by_event.get(event.get("event_ticker") or ""))
         if item:
             normalized.append(item)
     return normalized
@@ -294,6 +389,17 @@ def main() -> None:
         choices=["unopened", "open", "closed", "settled"],
         help="Kalshi event status to fetch",
     )
+    parser.add_argument(
+        "--skip-metadata",
+        action="store_true",
+        help="Skip Kalshi event metadata/image fetching",
+    )
+    parser.add_argument(
+        "--metadata-workers",
+        type=int,
+        default=METADATA_WORKERS,
+        help="Concurrent workers for Kalshi metadata/image fetching",
+    )
     args = parser.parse_args()
 
     print("Building Kalshi search index...")
@@ -310,7 +416,20 @@ def main() -> None:
         print(f"  Saved snapshot: {SNAPSHOT}")
 
     print(f"  Total Kalshi events: {len(events)}")
-    normalized = normalize_events(events)
+
+    metadata_by_event: dict[str, dict] = {}
+    if args.skip_metadata:
+        print("  Skipping Kalshi metadata")
+    elif args.local and METADATA_SNAPSHOT.exists():
+        print(f"  Loading metadata from local file: {METADATA_SNAPSHOT}")
+        metadata_by_event = load_metadata_snapshot()
+    else:
+        print("  Fetching Kalshi metadata...")
+        metadata_by_event = fetch_event_metadata_map(events, max_workers=args.metadata_workers)
+        save_metadata_snapshot(metadata_by_event)
+        print(f"  Saved metadata snapshot: {METADATA_SNAPSHOT}")
+
+    normalized = normalize_events(events, metadata_by_event=metadata_by_event)
     print(f"  Normalized events: {len(normalized)}")
 
     data = build_index(normalized, enrichments_path=ENRICHMENT_FILE)

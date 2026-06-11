@@ -17,6 +17,19 @@ kalshi_topic_metadata = kalshi_mod.kalshi_topic_metadata
 build_index = kalshi_mod.build_index
 
 
+SAMPLE_KALSHI_METADATA = {
+    "image_url": "https://kalshi-public-docs.s3.amazonaws.com/series-images-webp/KXBTC.webp",
+    "featured_image_url": "https://kalshi-public-docs.s3.us-east-1.amazonaws.com/market-images/KXBTC-26JUN-T100000.webp",
+    "market_details": [
+        {
+            "market_ticker": "KXBTC-26JUN-T100000",
+            "image_url": "https://kalshi-public-docs.s3.us-east-1.amazonaws.com/market-images/KXBTC-26JUN-T100000.webp",
+            "color_code": "#FF9900",
+        },
+    ],
+}
+
+
 SAMPLE_KALSHI_EVENT = {
     "event_ticker": "KXBTC-26JUN",
     "series_ticker": "KXBTC",
@@ -110,6 +123,16 @@ class TestNormalizeKalshiEvent(unittest.TestCase):
         assert event is not None
         self.assertTrue(event["markets"][0]["closed"])
 
+    def test_attaches_metadata_images(self):
+        event = normalize_event(SAMPLE_KALSHI_EVENT, SAMPLE_KALSHI_METADATA)
+        assert event is not None
+
+        self.assertEqual(event["image"], SAMPLE_KALSHI_METADATA["image_url"])
+        self.assertEqual(
+            event["markets"][0]["image"],
+            SAMPLE_KALSHI_METADATA["market_details"][0]["image_url"],
+        )
+
 
 class TestBuildKalshiIndex(unittest.TestCase):
     def test_builds_searchable_kalshi_docs(self):
@@ -126,6 +149,20 @@ class TestBuildKalshiIndex(unittest.TestCase):
         self.assertIn("Bitcoin", doc["tg"])
         self.assertIn("bitcoin", data["idx"])
         self.assertIn("100000", data["idx"])
+
+    def test_builds_kalshi_docs_with_images(self):
+        events = normalize_events(
+            [SAMPLE_KALSHI_EVENT],
+            metadata_by_event={"KXBTC-26JUN": SAMPLE_KALSHI_METADATA},
+        )
+        data = build_index(events)
+        doc = data["docs"][0]
+
+        self.assertEqual(doc["im"], SAMPLE_KALSHI_METADATA["image_url"])
+        self.assertEqual(
+            doc["mk"][0]["im"],
+            SAMPLE_KALSHI_METADATA["market_details"][0]["image_url"],
+        )
 
     def test_adds_topic_metadata_from_kalshi_ticker(self):
         event = {

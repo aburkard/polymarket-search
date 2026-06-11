@@ -42,7 +42,7 @@ jobs:
         run: python scripts/enrich.py --limit 100
 
       - name: Build Kalshi index
-        run: python scripts/build-kalshi-index.py
+        run: python scripts/build-kalshi-index.py --skip-metadata
 
       - name: Enrich new Kalshi events
         if: env.HAS_API_KEY == 'true'
