@@ -268,8 +268,9 @@ STOP_WORDS = {
 }
 
 
-def load_enrichments() -> dict[str, list[str]]:
-    path = Path(__file__).parent.parent / "data" / "enrichments.jsonl"
+def load_enrichments(path: Path | None = None) -> dict[str, list[str]]:
+    if path is None:
+        path = Path(__file__).parent.parent / "data" / "enrichments.jsonl"
     enrichments: dict[str, list[str]] = {}
     if path.exists():
         for line in path.read_text().splitlines():
@@ -285,13 +286,14 @@ def build_index(
     *,
     include_closed_markets: bool = False,
     archived: bool = False,
+    enrichments_path: Path | None = None,
 ) -> dict:
     docs = []
     idx: dict[str, list] = {}
     ctx: dict[str, list] = {}
     df: dict[str, int] = {}
     doc_lens: list[int] = []
-    enrichments = load_enrichments()
+    enrichments = load_enrichments(enrichments_path)
     n_enriched = 0
 
     for ev in events:

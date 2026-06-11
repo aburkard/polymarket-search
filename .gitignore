@@ -1,6 +1,7 @@
 node_modules/
 data/
 !data/enrichments.jsonl
+!data/kalshi_enrichments.jsonl
 .next/
 .env*
 *.db

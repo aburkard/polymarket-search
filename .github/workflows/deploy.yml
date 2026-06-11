@@ -40,11 +40,21 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: python scripts/enrich.py --limit 100
 
+      - name: Build Kalshi index
+        run: python scripts/build-kalshi-index.py
+
+      - name: Enrich new Kalshi events
+        if: env.HAS_API_KEY == 'true'
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: python scripts/enrich.py --provider kalshi --limit 100
+
       - name: Commit enrichments
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -f data/enrichments.jsonl
+          git add -f data/kalshi_enrichments.jsonl
           if git diff --staged --quiet; then
             echo "No new enrichments"
           else
@@ -58,7 +68,7 @@ jobs:
       - name: Build archived index
         run: python scripts/build-index.py --archived
 
-      - name: Build Kalshi index
+      - name: Rebuild Kalshi index with enrichments
         run: python scripts/build-kalshi-index.py
 
       - name: Optimize index size

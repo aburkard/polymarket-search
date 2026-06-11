@@ -19,6 +19,7 @@ BASE = "https://external-api.kalshi.com/trade-api/v2"
 PUBLIC = Path(__file__).parent.parent / "public"
 OUT = PUBLIC / "search-data-kalshi.json"
 SNAPSHOT = Path(__file__).parent.parent / "data" / "kalshi_events_open.jsonl"
+ENRICHMENT_FILE = Path(__file__).parent.parent / "data" / "kalshi_enrichments.jsonl"
 
 USER_AGENT = "polymarket-search-indexer/0.1 (andrewburkard@gmail.com)"
 API_PAGE_SIZE = 200
@@ -251,7 +252,7 @@ def main() -> None:
     normalized = normalize_events(events)
     print(f"  Normalized events: {len(normalized)}")
 
-    data = build_index(normalized)
+    data = build_index(normalized, enrichments_path=ENRICHMENT_FILE)
     attach_kalshi_fields(data, normalized)
     print(f"  Indexed: {data['n']} events, {len(data['idf'])} unique terms")
 

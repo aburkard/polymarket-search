@@ -97,6 +97,7 @@ function setProviderUi() {
     button.setAttribute("aria-pressed", active ? "true" : "false");
   });
   archiveToggleLabel.classList.toggle("is-hidden", !cfg.supportsArchived);
+  archiveToggleLabel.setAttribute("aria-hidden", cfg.supportsArchived ? "false" : "true");
   archiveToggle.disabled = !cfg.supportsArchived;
   if (!cfg.supportsArchived) {
     archiveToggle.checked = false;
@@ -528,9 +529,7 @@ function renderCard(r) {
   const url = resultUrl(r);
   if (r.tm) return renderSportCard(r, url);
 
-  const img = r.im
-    ? `<img src="${r.im}" alt="" class="result-img" loading="lazy">`
-    : '<div class="result-img placeholder"></div>';
+  const img = resultImageHtml(r);
 
   const outcomes = rankOutcomesForDisplay(r, currentQuery).slice(0, 5);
   let rowsHtml = "";
@@ -600,6 +599,24 @@ function resultUrl(r) {
   if (r.u) return r.u;
   if (r.p === "kalshi") return `https://kalshi.com/markets/${r.s}`;
   return `https://polymarket.com/event/${r.s}`;
+}
+
+function resultImageHtml(r) {
+  if (r.im) {
+    return `<img src="${r.im}" alt="" class="result-img" loading="lazy">`;
+  }
+  if (r.p === "kalshi") {
+    return `<div class="result-img provider-avatar kalshi-avatar" aria-hidden="true">${esc(categoryInitials(r))}</div>`;
+  }
+  return '<div class="result-img placeholder"></div>';
+}
+
+function categoryInitials(r) {
+  const label = (r.tg || []).find(Boolean) || "K";
+  const words = String(label).split(/\s+/).filter(Boolean);
+  if (!words.length) return "K";
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return words.slice(0, 2).map((word) => word[0]).join("").toUpperCase();
 }
 
 function renderSportCard(r, url) {

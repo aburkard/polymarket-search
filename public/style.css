@@ -304,7 +304,8 @@ h1 {
 .archive-toggle:hover { color: var(--text); }
 
 .archive-toggle.is-hidden {
-  display: none;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 #filters {
@@ -385,6 +386,22 @@ h1 {
   object-fit: cover; flex-shrink: 0;
 }
 .result-img.placeholder { display: none; }
+
+.provider-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.kalshi-avatar {
+  background: #2b6f55;
+  color: #fff;
+}
 
 .result-question {
   font-size: 0.9rem; font-weight: 500; color: var(--text); line-height: 1.3;

@@ -3,6 +3,7 @@
 import json
 import math
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -378,6 +379,19 @@ class TestBuildIndex(unittest.TestCase):
         self.assertEqual(self.data["v"], 3)
         self.assertIn("ts", self.data)
         self.assertRegex(self.data["ts"], r"\d{4}-\d{2}-\d{2}T")
+
+    def test_custom_enrichments_path_adds_aliases(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "enrichments.jsonl"
+            path.write_text(json.dumps({
+                "slug": "fed-rate",
+                "aliases": ["central bank"],
+            }) + "\n")
+            data = build_index(SAMPLE_EVENTS, enrichments_path=path)
+
+        self.assertIn("central", data["ctx"])
+        self.assertIn("bank", data["ctx"])
+        self.assertEqual(data["_n_enriched"], 1)
 
 
 class TestBuildIndexEmpty(unittest.TestCase):
