@@ -6,6 +6,17 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      run_enrichment:
+        description: 'Run LLM enrichment during this deploy'
+        required: false
+        type: boolean
+        default: false
+      enrichment_limit:
+        description: 'Max events to enrich per provider'
+        required: false
+        type: number
+        default: 100
 
 permissions:
   contents: write
@@ -24,6 +35,8 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     env:
       HAS_API_KEY: ${{ secrets.OPENROUTER_API_KEY != '' }}
+      RUN_ENRICHMENT: ${{ github.event_name == 'workflow_dispatch' && inputs.run_enrichment }}
+      ENRICHMENT_LIMIT: ${{ inputs.enrichment_limit || 100 }}
     steps:
       - uses: actions/checkout@v4
 
@@ -43,21 +56,21 @@ jobs:
         run: python scripts/build-index.py
 
       - name: Enrich new events
-        if: env.HAS_API_KEY == 'true'
+        if: env.HAS_API_KEY == 'true' && env.RUN_ENRICHMENT == 'true'
         continue-on-error: true
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-        run: python scripts/enrich.py --limit 100
+        run: python scripts/enrich.py --limit "$ENRICHMENT_LIMIT"
 
       - name: Build Kalshi index
         run: python scripts/build-kalshi-index.py --skip-metadata
 
       - name: Enrich new Kalshi events
-        if: env.HAS_API_KEY == 'true'
+        if: env.HAS_API_KEY == 'true' && env.RUN_ENRICHMENT == 'true'
         continue-on-error: true
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-        run: python scripts/enrich.py --provider kalshi --limit 100
+        run: python scripts/enrich.py --provider kalshi --limit "$ENRICHMENT_LIMIT"
 
       - name: Commit enrichments
         run: |
