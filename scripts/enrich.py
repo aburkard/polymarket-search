@@ -26,10 +26,12 @@ PROVIDER_CONFIG = {
     "polymarket": {
         "enrichment_file": ROOT / "data" / "enrichments.jsonl",
         "snapshot": ROOT / "data" / "events_active.jsonl",
+        "baseline_file": ROOT / "data" / "polymarket_auto_enrich_baseline.txt",
     },
     "kalshi": {
         "enrichment_file": ROOT / "data" / "kalshi_enrichments.jsonl",
         "snapshot": ROOT / "data" / "kalshi_events_open.jsonl",
+        "baseline_file": ROOT / "data" / "kalshi_auto_enrich_baseline.txt",
     },
 }
 
@@ -99,6 +101,17 @@ def load_existing_enrichments(path: Path) -> dict[str, list[str]]:
     return enrichments
 
 
+def load_baseline_slugs(path: Path) -> set[str]:
+    if not path.exists():
+        return set()
+    return {line.strip() for line in path.read_text().splitlines() if line.strip()}
+
+
+def write_baseline_slugs(path: Path, slugs: set[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(sorted(slugs)) + "\n")
+
+
 def load_events_from_snapshot(snapshot: Path) -> list[dict]:
     if not snapshot.exists():
         print(f"No snapshot at {snapshot}. Run the provider build first.", file=sys.stderr)
@@ -162,6 +175,10 @@ def event_slug(ev: dict, provider: str) -> str:
     return ev.get("slug", "")
 
 
+def event_slugs(events: list[dict], provider: str) -> set[str]:
+    return {slug for ev in events if (slug := event_slug(ev, provider))}
+
+
 def active_markets(ev: dict) -> list[dict]:
     return [m for m in (ev.get("markets") or []) if not is_closed_market(m)]
 
@@ -172,6 +189,36 @@ def event_volume(ev: dict) -> float:
 
 def event_volume_24h(ev: dict) -> float:
     return sum(market_volume_24h(m) for m in active_markets(ev))
+
+
+def enrichment_candidates(
+    events: list[dict],
+    provider: str,
+    existing: dict[str, list[str]],
+    *,
+    baseline_slugs: set[str] | None = None,
+) -> list[dict]:
+    baseline_slugs = baseline_slugs or set()
+    to_enrich = []
+    for ev in events:
+        slug = event_slug(ev, provider)
+        if not slug:
+            continue
+        if slug in existing:
+            continue
+        if slug in baseline_slugs:
+            continue
+        vol = event_volume(ev)
+        vol24 = event_volume_24h(ev)
+        if vol == 0 and vol24 == 0:
+            continue
+        to_enrich.append(ev)
+
+    to_enrich.sort(
+        key=event_volume,
+        reverse=True,
+    )
+    return to_enrich
 
 
 def build_kalshi_user_message(ev: dict) -> str:
@@ -253,11 +300,21 @@ def main():
     parser.add_argument("--provider", choices=sorted(PROVIDER_CONFIG), default="polymarket")
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--limit", type=int, default=0)
+    parser.add_argument(
+        "--new-only",
+        action="store_true",
+        help="Only enrich events that were not present in the provider baseline file.",
+    )
+    parser.add_argument(
+        "--write-baseline",
+        action="store_true",
+        help="Write the current provider snapshot slugs to the baseline file and exit.",
+    )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
     api_key = get_api_key()
-    if not api_key and not args.dry_run:
+    if not api_key and not args.dry_run and not args.write_baseline:
         print("No OPENROUTER_API_KEY found", file=sys.stderr)
         sys.exit(1)
 
@@ -269,22 +326,30 @@ def main():
     events = load_events_from_snapshot(cfg["snapshot"])
     print(f"Total events in snapshot: {len(events)}")
 
-    to_enrich = []
-    for ev in events:
-        slug = event_slug(ev, args.provider)
-        if not slug:
-            continue
-        if slug in existing:
-            continue
-        vol = event_volume(ev)
-        vol24 = event_volume_24h(ev)
-        if vol == 0 and vol24 == 0:
-            continue
-        to_enrich.append(ev)
+    baseline_file = cfg["baseline_file"]
+    if args.write_baseline:
+        slugs = event_slugs(events, args.provider)
+        write_baseline_slugs(baseline_file, slugs)
+        print(f"Wrote baseline: {len(slugs)} slugs to {baseline_file.relative_to(ROOT)}")
+        return
 
-    to_enrich.sort(
-        key=event_volume,
-        reverse=True,
+    baseline_slugs: set[str] = set()
+    if args.new_only:
+        if not baseline_file.exists():
+            print(
+                f"No baseline file at {baseline_file.relative_to(ROOT)}. "
+                "Run --write-baseline before using --new-only.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        baseline_slugs = load_baseline_slugs(baseline_file)
+        print(f"Baseline slugs: {len(baseline_slugs)}")
+
+    to_enrich = enrichment_candidates(
+        events,
+        args.provider,
+        existing,
+        baseline_slugs=baseline_slugs,
     )
 
     if args.limit:

@@ -2,6 +2,7 @@ node_modules/
 data/
 !data/enrichments.jsonl
 !data/kalshi_enrichments.jsonl
+!data/*_auto_enrich_baseline.txt
 .next/
 .env*
 *.db

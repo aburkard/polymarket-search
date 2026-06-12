@@ -12,6 +12,23 @@ on:
         required: false
         type: boolean
         default: false
+      enrichment_provider:
+        description: 'Provider to enrich'
+        required: false
+        type: choice
+        default: all
+        options:
+          - all
+          - polymarket
+          - kalshi
+      enrichment_mode:
+        description: 'Which events to enrich'
+        required: false
+        type: choice
+        default: new
+        options:
+          - new
+          - backlog
       enrichment_limit:
         description: 'Max events to enrich per provider'
         required: false
@@ -35,8 +52,11 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     env:
       HAS_API_KEY: ${{ secrets.OPENROUTER_API_KEY != '' }}
-      RUN_ENRICHMENT: ${{ github.event_name == 'workflow_dispatch' && inputs.run_enrichment }}
+      MANUAL_ENRICHMENT: ${{ github.event_name == 'workflow_dispatch' && inputs.run_enrichment }}
+      ENRICHMENT_PROVIDER: ${{ inputs.enrichment_provider || 'all' }}
+      ENRICHMENT_MODE: ${{ inputs.enrichment_mode || 'new' }}
       ENRICHMENT_LIMIT: ${{ inputs.enrichment_limit || 100 }}
+      AUTO_ENRICHMENT_LIMIT: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -55,22 +75,46 @@ jobs:
       - name: Fetch data and build index
         run: python scripts/build-index.py
 
-      - name: Enrich new events
-        if: env.HAS_API_KEY == 'true' && env.RUN_ENRICHMENT == 'true'
+      - name: Enrich new Polymarket events
+        if: env.HAS_API_KEY == 'true' && github.event_name == 'schedule'
         continue-on-error: true
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-        run: python scripts/enrich.py --limit "$ENRICHMENT_LIMIT"
+        run: python scripts/enrich.py --new-only --limit "$AUTO_ENRICHMENT_LIMIT"
+
+      - name: Manually enrich Polymarket events
+        if: env.HAS_API_KEY == 'true' && env.MANUAL_ENRICHMENT == 'true' && (env.ENRICHMENT_PROVIDER == 'all' || env.ENRICHMENT_PROVIDER == 'polymarket')
+        continue-on-error: true
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          mode_flag=""
+          if [ "$ENRICHMENT_MODE" = "new" ]; then
+            mode_flag="--new-only"
+          fi
+          python scripts/enrich.py $mode_flag --limit "$ENRICHMENT_LIMIT"
 
       - name: Build Kalshi index
         run: python scripts/build-kalshi-index.py --skip-metadata
 
       - name: Enrich new Kalshi events
-        if: env.HAS_API_KEY == 'true' && env.RUN_ENRICHMENT == 'true'
+        if: env.HAS_API_KEY == 'true' && github.event_name == 'schedule'
         continue-on-error: true
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-        run: python scripts/enrich.py --provider kalshi --limit "$ENRICHMENT_LIMIT"
+        run: python scripts/enrich.py --provider kalshi --new-only --limit "$AUTO_ENRICHMENT_LIMIT"
+
+      - name: Manually enrich Kalshi events
+        if: env.HAS_API_KEY == 'true' && env.MANUAL_ENRICHMENT == 'true' && (env.ENRICHMENT_PROVIDER == 'all' || env.ENRICHMENT_PROVIDER == 'kalshi')
+        continue-on-error: true
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          mode_flag=""
+          if [ "$ENRICHMENT_MODE" = "new" ]; then
+            mode_flag="--new-only"
+          fi
+          python scripts/enrich.py --provider kalshi $mode_flag --limit "$ENRICHMENT_LIMIT"
 
       - name: Commit enrichments
         run: |
