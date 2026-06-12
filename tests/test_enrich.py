@@ -54,6 +54,46 @@ class TestKalshiEnrichmentHelpers(unittest.TestCase):
         }
         self.assertEqual([m["title"] for m in enrich.active_markets(event)], ["Active"])
 
+    def test_enrichment_candidates_skip_existing_and_baseline(self):
+        events = [
+            {
+                "event_ticker": "KXOLD",
+                "markets": [{"status": "active", "volume_fp": "10"}],
+            },
+            {
+                "event_ticker": "KXENRICHED",
+                "markets": [{"status": "active", "volume_fp": "20"}],
+            },
+            {
+                "event_ticker": "KXNEW",
+                "markets": [{"status": "active", "volume_fp": "30"}],
+            },
+            {
+                "event_ticker": "KXNOVOL",
+                "markets": [{"status": "active", "volume_fp": "0", "volume_24h_fp": "0"}],
+            },
+        ]
+
+        candidates = enrich.enrichment_candidates(
+            events,
+            "kalshi",
+            {"kxenriched": ["already done"]},
+            baseline_slugs={"kxold"},
+        )
+
+        self.assertEqual([enrich.event_slug(ev, "kalshi") for ev in candidates], ["kxnew"])
+
+    def test_event_slugs_collects_provider_slugs(self):
+        events = [
+            {"event_ticker": "KXBTC-26JUN"},
+            {"event_ticker": "KXNBA-26"},
+            {"title": "missing ticker"},
+        ]
+        self.assertEqual(
+            enrich.event_slugs(events, "kalshi"),
+            {"kxbtc-26jun", "kxnba-26"},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
