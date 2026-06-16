@@ -59,6 +59,8 @@ jobs:
       AUTO_ENRICHMENT_LIMIT: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - uses: actions/setup-python@v5
         with:
