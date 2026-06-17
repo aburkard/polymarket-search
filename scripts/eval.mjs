@@ -6,20 +6,21 @@
  * for manual analysis.
  *
  * Usage:
- *   node --input-type=module scripts/eval.mjs
- *   node --input-type=module scripts/eval.mjs --sweep   # sweep params
+ *   node scripts/eval.mjs
+ *   node scripts/eval.mjs --provider=kalshi
+ *   node scripts/eval.mjs --sweep   # sweep params
  */
 
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { prepareIndex, search, DEFAULT_CONFIG } from "../public/search.js";
 
-const data = prepareIndex(
-  JSON.parse(readFileSync("public/search-data.json", "utf8")),
-);
+function loadIndex(path) {
+  return prepareIndex(JSON.parse(readFileSync(path, "utf8")));
+}
 
 // ── Eval set: [query, regex pattern that should match, notes] ──────────
 
-const EVALS = [
+const POLYMARKET_EVALS = [
   // ── Clean, specific queries ──────────────────────────────────────────
   ["bitcoin price", /bitcoin/i, "clean:crypto"],
   ["ethereum price", /ethereum/i, "clean:crypto"],
@@ -175,9 +176,38 @@ const EVALS = [
   ["Fed decision in April?", /fed.*decision.*april/i, "edge:exactTitle"],
 ];
 
+const KALSHI_EVALS = [
+  ["nba champion", /pro basketball champion|basketball.*champion/i, "kalshi:sports"],
+  ["pro basketball champion", /pro basketball champion|basketball.*champion/i, "kalshi:sports"],
+  ["world cup winner", /world.*soccer.*cup.*winner|world.*cup.*winner/i, "kalshi:sports"],
+  ["world cup", /world.*soccer.*cup|golden boot/i, "kalshi:sports"],
+  ["democratic presidential nominee", /democratic.*presidential.*nominee/i, "kalshi:politics"],
+  ["republican presidential nominee", /republican.*presidential.*nominee/i, "kalshi:politics"],
+  ["gop nominee", /republican.*nominee/i, "kalshi:politics"],
+  ["bitcoin", /bitcoin|btc/i, "kalshi:crypto"],
+  ["btc", /bitcoin|btc/i, "kalshi:crypto"],
+  ["fed rate cut", /rate cuts|fed decision/i, "kalshi:finance"],
+  ["inflation cpi", /inflation|cpi/i, "kalshi:finance"],
+  ["stanley cup", /stanley.*cup/i, "kalshi:sports"],
+  ["nfl champion", /pro football champion|championship winner/i, "kalshi:sports"],
+  ["tariffs", /tariff/i, "kalshi:politics"],
+  ["agi", /agi|artificial intelligence|math ai/i, "kalshi:tech"],
+];
+
+const PROVIDERS = {
+  polymarket: {
+    path: "public/search-data.json",
+    evals: POLYMARKET_EVALS,
+  },
+  kalshi: {
+    path: "public/search-data-kalshi.json",
+    evals: KALSHI_EVALS,
+  },
+};
+
 // ── Scoring ─────────────────────────────────────────────────────────────
 
-function evalQuery(query, pattern, config, topK = 10) {
+function evalQuery(query, pattern, data, config, topK = 10) {
   const results = search(query, data, topK, config);
   if (pattern === null) {
     return results.length === 0
@@ -192,16 +222,18 @@ function evalQuery(query, pattern, config, topK = 10) {
   return { rank: 0, hit: false, top: results[0]?.q || "(none)" };
 }
 
-function runEval(config, label = "", verbose = false) {
+function runEval(provider, evals, data, config, label = "", verbose = false) {
   let totalRR = 0;
   let hits1 = 0,
     hits3 = 0,
     hits5 = 0;
 
-  if (verbose) console.log(`\n${"=".repeat(70)}\n  ${label || "Eval"}\n${"=".repeat(70)}`);
+  if (verbose) {
+    console.log(`\n${"=".repeat(70)}\n  ${provider}: ${label || "Eval"}\n${"=".repeat(70)}`);
+  }
 
-  for (const [query, pattern, notes] of EVALS) {
-    const { rank, hit, top } = evalQuery(query, pattern, config);
+  for (const [query, pattern, notes] of evals) {
+    const { rank, hit, top } = evalQuery(query, pattern, data, config);
     const rr = rank > 0 ? 1 / rank : 0;
     totalRR += rr;
     if (rank === 1) hits1++;
@@ -216,7 +248,7 @@ function runEval(config, label = "", verbose = false) {
     }
   }
 
-  const n = EVALS.length;
+  const n = evals.length;
   const metrics = {
     mrr: totalRR / n,
     hits1: hits1 / n,
@@ -234,9 +266,66 @@ function runEval(config, label = "", verbose = false) {
   return metrics;
 }
 
+function selectedProviders() {
+  const providerArg = process.argv.find((arg) => arg.startsWith("--provider="));
+  const provider = providerArg?.split("=")[1];
+  if (!provider || provider === "all") return Object.keys(PROVIDERS);
+  if (!PROVIDERS[provider]) {
+    throw new Error(`Unknown provider "${provider}". Use one of: ${Object.keys(PROVIDERS).join(", ")}, all`);
+  }
+  return [provider];
+}
+
+function loadSelectedProviders() {
+  return selectedProviders().flatMap((provider) => {
+    const suite = PROVIDERS[provider];
+    if (!existsSync(suite.path)) {
+      console.warn(`Skipping ${provider}: missing ${suite.path}`);
+      return [];
+    }
+    return [{ provider, ...suite, data: loadIndex(suite.path) }];
+  });
+}
+
+function runEvalSuite(providerSuites, config, label = "", verbose = false) {
+  let total = 0;
+  let weightedMRR = 0;
+  let hits1n = 0;
+  let hits3n = 0;
+  let hits5n = 0;
+
+  for (const suite of providerSuites) {
+    const metrics = runEval(
+      suite.provider,
+      suite.evals,
+      suite.data,
+      config,
+      label,
+      verbose,
+    );
+    const n = suite.evals.length;
+    total += n;
+    weightedMRR += metrics.mrr * n;
+    hits1n += metrics.hits1n;
+    hits3n += metrics.hits3n;
+    hits5n += metrics.hits5n;
+  }
+
+  return {
+    mrr: total ? weightedMRR / total : 0,
+    hits1: total ? hits1n / total : 0,
+    hits3: total ? hits3n / total : 0,
+    hits5: total ? hits5n / total : 0,
+    hits1n,
+    hits3n,
+    hits5n,
+    total,
+  };
+}
+
 // ── Param sweep ─────────────────────────────────────────────────────────
 
-function sweep() {
+function sweep(providerSuites) {
   console.log("Sweeping parameters...\n");
 
   const sweeps = {
@@ -256,7 +345,7 @@ function sweep() {
   for (const [param, values] of Object.entries(sweeps)) {
     for (const val of values) {
       const config = { ...DEFAULT_CONFIG, [param]: val };
-      const metrics = runEval(config);
+      const metrics = runEvalSuite(providerSuites, config);
       results.push({ param, val, ...metrics });
     }
   }
@@ -274,7 +363,7 @@ function sweep() {
     const current = DEFAULT_CONFIG[param];
     const improved = best.val !== current;
     console.log(
-      `  ${param.padEnd(20)} best=${String(best.val).padEnd(6)} MRR=${best.mrr.toFixed(3)} H@1=${best.hits1n}/${EVALS.length} ${improved ? `← change from ${current}` : "(current is best)"}`,
+      `  ${param.padEnd(20)} best=${String(best.val).padEnd(6)} MRR=${best.mrr.toFixed(3)} H@1=${best.hits1n}/${best.total} ${improved ? `← change from ${current}` : "(current is best)"}`,
     );
   }
 }
@@ -282,11 +371,12 @@ function sweep() {
 // ── Main ────────────────────────────────────────────────────────────────
 
 const doSweep = process.argv.includes("--sweep");
+const providerSuites = loadSelectedProviders();
 
 if (doSweep) {
-  runEval(DEFAULT_CONFIG, "Current defaults", true);
+  runEvalSuite(providerSuites, DEFAULT_CONFIG, "Current defaults", true);
   console.log();
-  sweep();
+  sweep(providerSuites);
 } else {
-  runEval(DEFAULT_CONFIG, "Current defaults", true);
+  runEvalSuite(providerSuites, DEFAULT_CONFIG, "Current defaults", true);
 }
