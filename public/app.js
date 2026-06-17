@@ -28,6 +28,12 @@ const PROVIDERS = {
     archivedScript: "search-data-kalshi-archived.js",
     archivedGlobalName: "__SDKA__",
   },
+  manifold: {
+    label: "Manifold",
+    script: "search-data-manifold.js",
+    globalName: "__SDM__",
+    supportsArchived: false,
+  },
 };
 
 const providerState = Object.fromEntries(
@@ -600,6 +606,7 @@ function renderCard(r) {
 function resultUrl(r) {
   if (r.u) return r.u;
   if (r.p === "kalshi") return `https://kalshi.com/markets/${r.s}`;
+  if (r.p === "manifold") return `https://manifold.markets/${r.s}`;
   return `https://polymarket.com/event/${r.s}`;
 }
 
@@ -609,6 +616,9 @@ function resultImageHtml(r) {
   }
   if (r.p === "kalshi") {
     return `<div class="result-img provider-avatar kalshi-avatar" aria-hidden="true">${esc(categoryInitials(r))}</div>`;
+  }
+  if (r.p === "manifold") {
+    return `<div class="result-img provider-avatar manifold-avatar" aria-hidden="true">${esc(categoryInitials(r) || "M")}</div>`;
   }
   return '<div class="result-img placeholder"></div>';
 }
@@ -733,7 +743,7 @@ async function refreshLivePrices(results) {
   refreshAbort = ctrl;
 
   const slugs = results
-    .filter((r) => !r.ar && r.p !== "kalshi")
+    .filter((r) => !r.ar && !r.p)
     .map((r) => r.s)
     .filter(Boolean);
   if (!slugs.length) return;
@@ -794,7 +804,7 @@ function priceTipHtml(o) {
 function buildMeta(r) {
   const parts = [];
   if (r.ar) parts.push('<span class="archive-badge">Archived</span>');
-  parts.push(`<span>${formatVol(r.vt || r.v)} vol</span>`);
+  parts.push(`<span>${formatVol(r.vt || r.v, r)} vol</span>`);
   if (r.ed) parts.push(`<span>${r.ed}</span>`);
   return parts.join('<span class="meta-sep"></span>');
 }
@@ -820,11 +830,14 @@ function shortenQuestion(marketQ, eventTitle) {
   return label || marketQ.slice(0, 35);
 }
 
-function formatVol(v) {
-  if (v >= 1_000_000) return "$" + (v / 1_000_000).toFixed(1) + "M";
-  if (v >= 1_000) return "$" + (v / 1_000).toFixed(0) + "K";
-  if (v > 0) return "$" + v;
-  return "$0";
+function formatVol(v, result = null) {
+  const isManifold = result?.p === "manifold";
+  const prefix = isManifold ? "" : "$";
+  const suffix = isManifold && result?.tk ? ` ${result.tk}` : "";
+  if (v >= 1_000_000) return `${prefix}${(v / 1_000_000).toFixed(1)}M${suffix}`;
+  if (v >= 1_000) return `${prefix}${(v / 1_000).toFixed(0)}K${suffix}`;
+  if (v > 0) return `${prefix}${v}${suffix}`;
+  return `${prefix}0${suffix}`;
 }
 
 function esc(s) {

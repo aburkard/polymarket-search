@@ -194,6 +194,17 @@ const KALSHI_EVALS = [
   ["agi", /agi|artificial intelligence|math ai/i, "kalshi:tech"],
 ];
 
+const MANIFOLD_EVALS = [
+  ["world cup", /world.*cup|fifa/i, "manifold:sports"],
+  ["nba champion", /nba|basketball|champion/i, "manifold:sports"],
+  ["bitcoin", /bitcoin|btc/i, "manifold:crypto"],
+  ["btc", /bitcoin|btc/i, "manifold:crypto"],
+  ["fed rates", /fed|rate|inflation|cpi/i, "manifold:economics"],
+  ["inflation", /inflation|cpi/i, "manifold:economics"],
+  ["election", /election|president|senate|house/i, "manifold:politics"],
+  ["ai", /\b(ai|artificial intelligence|agi)\b/i, "manifold:tech"],
+];
+
 const PROVIDERS = {
   polymarket: {
     path: "public/search-data.json",
@@ -202,6 +213,10 @@ const PROVIDERS = {
   kalshi: {
     path: "public/search-data-kalshi.json",
     evals: KALSHI_EVALS,
+  },
+  manifold: {
+    path: "public/search-data-manifold.json",
+    evals: MANIFOLD_EVALS,
   },
 };
 

@@ -194,6 +194,20 @@ describe("search: prefix match", () => {
     assert.ok(results.length > 0);
     assert.ok(results.some((r) => r.q.toLowerCase().includes("fed")));
   });
+
+  it("does not prefix-match two-letter terms into unrelated words", () => {
+    const data = prepareIndex({
+      v: 3,
+      n: 1,
+      avgDl: 2,
+      dl: [2],
+      idx: { airline: [[0, 1]], default: [[0, 1]] },
+      idf: { airline: 1, default: 1 },
+      docs: [{ q: "Airline Default", s: "airline-default", v: 100, vt: 100, mk: [] }],
+    });
+
+    assert.equal(search("ai", data).length, 0);
+  });
 });
 
 // ── Search: fuzzy match ─────────────────────────────────────────────────
