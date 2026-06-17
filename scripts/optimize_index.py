@@ -107,3 +107,6 @@ if __name__ == "__main__":
     kalshi = PUBLIC / "search-data-kalshi.json"
     if kalshi.exists():
         optimize_file(kalshi, "__SDK__", KALSHI_IMG_PREFIX)
+    kalshi_archived = PUBLIC / "search-data-kalshi-archived.json"
+    if kalshi_archived.exists():
+        optimize_file(kalshi_archived, "__SDKA__", KALSHI_IMG_PREFIX)

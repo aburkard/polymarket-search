@@ -14,6 +14,7 @@ kalshi_mod = import_module("build-kalshi-index")
 normalize_event = kalshi_mod.normalize_event
 normalize_events = kalshi_mod.normalize_events
 attach_kalshi_fields = kalshi_mod.attach_kalshi_fields
+fetch_archived_events = kalshi_mod.fetch_archived_events
 fetch_event_metadata_map = kalshi_mod.fetch_event_metadata_map
 kalshi_topic_metadata = kalshi_mod.kalshi_topic_metadata
 build_index = kalshi_mod.build_index
@@ -121,9 +122,28 @@ class TestNormalizeKalshiEvent(unittest.TestCase):
             **SAMPLE_KALSHI_EVENT,
             "markets": [{**SAMPLE_KALSHI_EVENT["markets"][0], "status": "settled"}],
         }
-        event = normalize_event(raw)
+        event = normalize_event(raw, include_closed_markets=True)
         assert event is not None
         self.assertTrue(event["markets"][0]["closed"])
+
+    def test_active_normalization_excludes_closed_markets(self):
+        raw = {
+            **SAMPLE_KALSHI_EVENT,
+            "markets": [{**SAMPLE_KALSHI_EVENT["markets"][0], "status": "closed"}],
+        }
+
+        self.assertIsNone(normalize_event(raw))
+
+    def test_archived_normalization_includes_closed_markets(self):
+        raw = {
+            **SAMPLE_KALSHI_EVENT,
+            "markets": [{**SAMPLE_KALSHI_EVENT["markets"][0], "status": "closed"}],
+        }
+        events = normalize_events([raw], include_closed_markets=True)
+        data = build_index(events, include_closed_markets=True, archived=True)
+
+        self.assertEqual(data["n"], 1)
+        self.assertEqual(data["docs"][0]["ar"], 1)
 
     def test_attaches_metadata_images(self):
         event = normalize_event(SAMPLE_KALSHI_EVENT, SAMPLE_KALSHI_METADATA)
@@ -204,6 +224,28 @@ class TestBuildKalshiIndex(unittest.TestCase):
         self.assertEqual(doc["mc"], 2)
         total = sum(m["op"][0] for m in doc["mk"])
         self.assertAlmostEqual(total, 1.0, places=2)
+
+    def test_archived_fetch_combines_closed_and_settled_events(self):
+        closed_event = {"event_ticker": "KXCLOSED"}
+        settled_event = {"event_ticker": "KXSETTLED"}
+        updated_closed = {"event_ticker": "KXCLOSED", "title": "deduped"}
+
+        def fake_fetch(*, status, max_pages=0):
+            self.assertEqual(max_pages, 3)
+            return {
+                "closed": [closed_event],
+                "settled": [settled_event, updated_closed],
+            }[status]
+
+        with patch.object(kalshi_mod, "fetch_all_events", side_effect=fake_fetch) as fetch:
+            events = fetch_archived_events(max_pages=3)
+
+        self.assertEqual(fetch.call_count, 2)
+        self.assertEqual(
+            {event["event_ticker"] for event in events},
+            {"KXCLOSED", "KXSETTLED"},
+        )
+        self.assertIn(updated_closed, events)
 
     def test_metadata_fetch_reuses_cache_and_fetches_missing(self):
         cached = {"KXBTC-26JUN": SAMPLE_KALSHI_METADATA}

@@ -18,12 +18,13 @@ The worker will be deployed to `https://polymarket-search-api.<your-subdomain>.w
 ```bash
 curl 'https://polymarket-search-api.<your-subdomain>.workers.dev/?q=canada'
 curl 'https://polymarket-search-api.<your-subdomain>.workers.dev/?q=bitcoin&limit=5'
+curl 'https://polymarket-search-api.<your-subdomain>.workers.dev/?q=bitcoin&provider=kalshi&archived=1&limit=5'
 curl 'https://polymarket-search-api.<your-subdomain>.workers.dev/?trending=1&limit=10'
 ```
 
 ## How it works
 
-The worker fetches `search-data.json` from GitHub Pages on cold start, caches it in memory for 5 minutes, and runs the same `search()` function as the browser frontend. Cloudflare's CDN also caches the upstream fetch.
+The worker fetches provider-specific search indexes from GitHub Pages on cold start, caches them in memory for 5 minutes, and runs the same `search()` function as the browser frontend. Cloudflare's CDN also caches the upstream fetch.
 
 Cold latency: ~150-300ms (fetching index from GH Pages).
 Warm latency: ~10-30ms (in-memory search at edge).

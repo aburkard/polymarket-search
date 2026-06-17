@@ -140,6 +140,9 @@ jobs:
       - name: Rebuild Kalshi index with enrichments
         run: python scripts/build-kalshi-index.py
 
+      - name: Build archived Kalshi index
+        run: python scripts/build-kalshi-index.py --archived --metadata-cache-only
+
       - name: Save Kalshi metadata cache
         uses: actions/cache/save@v4
         if: always()
