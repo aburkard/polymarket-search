@@ -26,7 +26,7 @@ curl 'https://polymarket-search-api.wkr0.workers.dev/?trending=1&limit=10'
 - `provider` (string) — market source. Use `kalshi` for Kalshi; defaults to `polymarket`.
 - `limit` (int, default 20, max 100) — number of results.
 - `trending` (any value) — when `q` is empty, return top events by volume.
-- `archived` (bool) — set to `1` to include archived markets for supported providers.
+- `archived` (bool) — set to `1` to include archived markets for supported providers. Kalshi archived search indexes a recent archived window rather than the full historical settled-event archive.
 
 ### Response shape
 
