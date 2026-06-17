@@ -153,6 +153,9 @@ jobs:
       - name: Optimize index size
         run: python scripts/optimize_index.py
 
+      - name: Check index health
+        run: python scripts/check_index_health.py
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 

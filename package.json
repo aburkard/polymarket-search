@@ -6,6 +6,7 @@
     "test": "node --test tests/search.test.js",
     "test:python": "python3 -m unittest discover -s tests -p 'test_*.py' -v",
     "eval": "node scripts/eval.mjs",
+    "check:index-health": "python3 scripts/check_index_health.py",
     "build": "python3 scripts/build-index.py",
     "build:archived": "python3 scripts/build-index.py --archived",
     "build:kalshi": "python3 scripts/build-kalshi-index.py",
