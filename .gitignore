@@ -13,5 +13,7 @@ public/search-data-archived.json
 public/search-data-archived.js
 public/search-data-kalshi.json
 public/search-data-kalshi.js
+public/search-data-kalshi-archived.json
+public/search-data-kalshi-archived.js
 worker/.wrangler/
 .playwright-mcp/

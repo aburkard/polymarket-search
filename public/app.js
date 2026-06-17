@@ -24,7 +24,9 @@ const PROVIDERS = {
     label: "Kalshi",
     script: "search-data-kalshi.js",
     globalName: "__SDK__",
-    supportsArchived: false,
+    supportsArchived: true,
+    archivedScript: "search-data-kalshi-archived.js",
+    archivedGlobalName: "__SDKA__",
   },
 };
 

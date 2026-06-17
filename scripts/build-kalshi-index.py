@@ -22,7 +22,9 @@ build_index = build_index_mod.build_index
 BASE = "https://external-api.kalshi.com/trade-api/v2"
 PUBLIC = Path(__file__).parent.parent / "public"
 OUT = PUBLIC / "search-data-kalshi.json"
+ARCHIVED_OUT = PUBLIC / "search-data-kalshi-archived.json"
 SNAPSHOT = Path(__file__).parent.parent / "data" / "kalshi_events_open.jsonl"
+ARCHIVED_SNAPSHOT = Path(__file__).parent.parent / "data" / "kalshi_events_archived.jsonl"
 METADATA_SNAPSHOT = Path(__file__).parent.parent / "data" / "kalshi_event_metadata_open.jsonl"
 ENRICHMENT_FILE = Path(__file__).parent.parent / "data" / "kalshi_enrichments.jsonl"
 
@@ -114,6 +116,17 @@ def fetch_all_events(
         time.sleep(0.05)
 
     return events
+
+
+def fetch_archived_events(*, max_pages: int = 0) -> list[dict]:
+    events_by_ticker: dict[str, dict] = {}
+    for status in ("closed", "settled"):
+        print(f"  Fetching status={status}...")
+        for event in fetch_all_events(status=status, max_pages=max_pages):
+            ticker = event.get("event_ticker")
+            if ticker:
+                events_by_ticker[ticker] = event
+    return list(events_by_ticker.values())
 
 
 def load_local_events(path: str) -> list[dict]:
@@ -345,7 +358,12 @@ def _image_url(value: Any) -> str:
     return url
 
 
-def normalize_event(event: dict, metadata: dict | None = None) -> dict | None:
+def normalize_event(
+    event: dict,
+    metadata: dict | None = None,
+    *,
+    include_closed_markets: bool = False,
+) -> dict | None:
     metadata = metadata or {}
     market_images = {
         detail.get("market_ticker"): _image_url(detail.get("image_url"))
@@ -358,6 +376,8 @@ def normalize_event(event: dict, metadata: dict | None = None) -> dict | None:
         market_ticker = market.get("ticker") or ""
         status = (market.get("status") or "").lower()
         closed = status in {"closed", "settled", "expired", "finalized"}
+        if closed and not include_closed_markets:
+            continue
         volume = _float(market.get("volume_fp"))
         volume24 = _float(market.get("volume_24h_fp"))
         probability = _yes_probability(market)
@@ -416,11 +436,20 @@ def normalize_event(event: dict, metadata: dict | None = None) -> dict | None:
     }
 
 
-def normalize_events(events: list[dict], metadata_by_event: dict[str, dict] | None = None) -> list[dict]:
+def normalize_events(
+    events: list[dict],
+    metadata_by_event: dict[str, dict] | None = None,
+    *,
+    include_closed_markets: bool = False,
+) -> list[dict]:
     metadata_by_event = metadata_by_event or {}
     normalized = []
     for event in events:
-        item = normalize_event(event, metadata_by_event.get(event.get("event_ticker") or ""))
+        item = normalize_event(
+            event,
+            metadata_by_event.get(event.get("event_ticker") or ""),
+            include_closed_markets=include_closed_markets,
+        )
         if item:
             normalized.append(item)
     return normalized
@@ -450,6 +479,11 @@ def main() -> None:
         default="open",
         choices=["unopened", "open", "closed", "settled"],
         help="Kalshi event status to fetch",
+    )
+    parser.add_argument(
+        "--archived",
+        action="store_true",
+        help="Build the archived/closed Kalshi event index instead of the open index",
     )
     parser.add_argument(
         "--skip-metadata",
@@ -486,12 +520,17 @@ def main() -> None:
         events = load_local_events(args.local)
     else:
         print("  Fetching from Kalshi API...")
-        events = fetch_all_events(status=args.status, max_pages=args.max_pages)
-        SNAPSHOT.parent.mkdir(parents=True, exist_ok=True)
-        with SNAPSHOT.open("w") as f:
+        events = (
+            fetch_archived_events(max_pages=args.max_pages)
+            if args.archived
+            else fetch_all_events(status=args.status, max_pages=args.max_pages)
+        )
+        snapshot = ARCHIVED_SNAPSHOT if args.archived else SNAPSHOT
+        snapshot.parent.mkdir(parents=True, exist_ok=True)
+        with snapshot.open("w") as f:
             for event in events:
                 f.write(json.dumps(event, separators=(",", ":")) + "\n")
-        print(f"  Saved snapshot: {SNAPSHOT}")
+        print(f"  Saved snapshot: {snapshot}")
 
     print(f"  Total Kalshi events: {len(events)}")
 
@@ -520,19 +559,29 @@ def main() -> None:
         save_metadata_snapshot(metadata_by_event)
         print(f"  Saved metadata snapshot: {METADATA_SNAPSHOT}")
 
-    normalized = normalize_events(events, metadata_by_event=metadata_by_event)
+    normalized = normalize_events(
+        events,
+        metadata_by_event=metadata_by_event,
+        include_closed_markets=args.archived,
+    )
     print(f"  Normalized events: {len(normalized)}")
 
-    data = build_index(normalized, enrichments_path=ENRICHMENT_FILE)
+    data = build_index(
+        normalized,
+        include_closed_markets=args.archived,
+        archived=args.archived,
+        enrichments_path=ENRICHMENT_FILE,
+    )
     attach_kalshi_fields(data, normalized)
     print(f"  Indexed: {data['n']} events, {len(data['idf'])} unique terms")
 
-    OUT.parent.mkdir(parents=True, exist_ok=True)
+    out = ARCHIVED_OUT if args.archived else OUT
+    out.parent.mkdir(parents=True, exist_ok=True)
     raw = json.dumps(data, separators=(",", ":"))
-    OUT.write_text(raw)
+    out.write_text(raw)
 
     size_mb = len(raw) / 1024 / 1024
-    print(f"  Written: {OUT} ({size_mb:.2f} MB)")
+    print(f"  Written: {out} ({size_mb:.2f} MB)")
 
 
 if __name__ == "__main__":
