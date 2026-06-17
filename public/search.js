@@ -243,6 +243,7 @@ export function search(query, data, limit = 20, config = DEFAULT_CONFIG) {
   if (!rawTerms.length) return [];
   const { expanded: terms, termOrigin } = expandQuery(rawTerms);
   const nTerms = rawTerms.length;
+  const allowShortPrefix = rawTerms.length > 1;
 
   const C = config;
   const vocab = data._vocab || Object.keys(data.idx);
@@ -255,9 +256,9 @@ export function search(query, data, limit = 20, config = DEFAULT_CONFIG) {
   const termHits = new Map();
 
   for (const term of terms) {
-    const baseMatches = findMatches(term, data.idx, data.idf, vocab, dl, avgDl, C);
+    const baseMatches = findMatches(term, data.idx, data.idf, vocab, dl, avgDl, C, allowShortPrefix);
     const ctxMatches = data.ctx
-      ? findMatches(term, ctxIdx, data.idf, ctxVocab, dl, avgDl, C)
+      ? findMatches(term, ctxIdx, data.idf, ctxVocab, dl, avgDl, C, allowShortPrefix)
       : new Map();
 
     const merged = new Map(baseMatches);
@@ -431,7 +432,7 @@ function bm25Score(tf, idf, docLen, avgDl, K1, B) {
   return idf * ((tf * (K1 + 1)) / (tf + K1 * norm));
 }
 
-function findMatches(term, idx, idf, vocab, dl, avgDl, C) {
+function findMatches(term, idx, idf, vocab, dl, avgDl, C, allowShortPrefix = false) {
   const seen = new Map();
   const K1 = C.bm25K1;
   const B = C.bm25B;
@@ -452,7 +453,7 @@ function findMatches(term, idx, idf, vocab, dl, avgDl, C) {
 
   for (const vt of vocab) {
     if (vt === term) continue;
-    if (vt.startsWith(term)) {
+    if ((term.length >= 3 || allowShortPrefix) && vt.startsWith(term)) {
       const vtIdf = idf[vt] || 0;
       for (const posting of idx[vt]) {
         const [docIdx, tf] = posting;

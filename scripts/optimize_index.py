@@ -30,7 +30,7 @@ def optimize_file(index_file: Path, js_global: str, image_prefix: str = POLYMARK
 
     # Strip image prefix from docs and outcomes
     for doc in data["docs"]:
-        if doc.get("im", "").startswith(image_prefix):
+        if image_prefix and doc.get("im", "").startswith(image_prefix):
             doc["im"] = doc["im"][len(image_prefix):]
 
         # Keep tags as array for filtering (was stripped, now restored)
@@ -45,12 +45,12 @@ def optimize_file(index_file: Path, js_global: str, image_prefix: str = POLYMARK
             mk.pop("v", None)
 
             # Strip outcome image prefix
-            if mk.get("im", "").startswith(image_prefix):
+            if image_prefix and mk.get("im", "").startswith(image_prefix):
                 mk["im"] = mk["im"][len(image_prefix):]
 
         # Strip team logo prefix
         for tm in doc.get("tm", []):
-            if tm.get("l", "").startswith(image_prefix):
+            if image_prefix and tm.get("l", "").startswith(image_prefix):
                 tm["l"] = tm["l"][len(image_prefix):]
 
     # Reduce IDF precision
@@ -110,3 +110,6 @@ if __name__ == "__main__":
     kalshi_archived = PUBLIC / "search-data-kalshi-archived.json"
     if kalshi_archived.exists():
         optimize_file(kalshi_archived, "__SDKA__", KALSHI_IMG_PREFIX)
+    manifold = PUBLIC / "search-data-manifold.json"
+    if manifold.exists():
+        optimize_file(manifold, "__SDM__", "")

@@ -15,5 +15,7 @@ public/search-data-kalshi.json
 public/search-data-kalshi.js
 public/search-data-kalshi-archived.json
 public/search-data-kalshi-archived.js
+public/search-data-manifold.json
+public/search-data-manifold.js
 worker/.wrangler/
 .playwright-mcp/

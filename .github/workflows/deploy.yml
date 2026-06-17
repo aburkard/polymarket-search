@@ -143,6 +143,9 @@ jobs:
       - name: Build archived Kalshi index
         run: python scripts/build-kalshi-index.py --archived --metadata-cache-only --max-pages 100
 
+      - name: Build Manifold index
+        run: python scripts/build-manifold-index.py
+
       - name: Save Kalshi metadata cache
         uses: actions/cache/save@v4
         if: always()

@@ -25,6 +25,7 @@ DEFAULT_SPECS = [
     IndexSpec("search-data-archived.json", "Polymarket archived", 5000, 25000, 12, 12),
     IndexSpec("search-data-kalshi.json", "Kalshi active", 4000, 15000, 16, 16),
     IndexSpec("search-data-kalshi-archived.json", "Kalshi archived", 10000, 30000, 30, 30),
+    IndexSpec("search-data-manifold.json", "Manifold active", 500, 8000, 16, 16),
 ]
 
 
