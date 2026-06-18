@@ -135,7 +135,7 @@ jobs:
         run: python scripts/build-index.py
 
       - name: Build archived index
-        run: python scripts/build-index.py --archived
+        run: python scripts/build-index.py --archived --max-pages 100
 
       - name: Rebuild Kalshi index with enrichments
         run: python scripts/build-kalshi-index.py
