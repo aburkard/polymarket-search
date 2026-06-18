@@ -141,6 +141,20 @@ async function kalshiEventResponse(ticker) {
 
   const upstream = `${KALSHI_API_BASE}/markets?event_ticker=${encodeURIComponent(ticker)}&limit=100`;
   const resp = await fetchKalshiEvent(upstream);
+  if (resp.status === 429) {
+    const retryAfter = resp.headers.get("Retry-After");
+    const headers = new Headers({
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "public, max-age=5",
+      "X-Upstream-Status": "429",
+      ...CORS_HEADERS,
+    });
+    if (retryAfter) headers.set("Retry-After", retryAfter);
+    return new Response(JSON.stringify({ markets: [], rateLimited: true }), {
+      status: 200,
+      headers,
+    });
+  }
 
   const headers = new Headers({
     "Content-Type": resp.headers.get("Content-Type") || "application/json; charset=utf-8",

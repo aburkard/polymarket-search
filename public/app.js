@@ -851,11 +851,17 @@ async function refreshKalshiLivePrices(results, ctrl) {
   const targets = results.filter((r) => !r.ar && r.p === "kalshi" && r.s);
   if (!targets.length) return;
 
+  let rateLimited = false;
   await runLimited(targets, KALSHI_LIVE_CONCURRENCY, ctrl.signal, async (r) => {
+    if (rateLimited) return;
     const url = `${KALSHI_LIVE_EVENTS_URL}/${encodeURIComponent(r.s.toUpperCase())}`;
     const resp = await fetch(url, { signal: ctrl.signal });
     if (!resp.ok || ctrl.signal.aborted) return;
     const payload = await resp.json();
+    if (payload.rateLimited) {
+      rateLimited = true;
+      return;
+    }
     const event = payload.event || payload;
     const markets = activeKalshiMarkets(event.markets || payload.markets || []);
     if (!markets.length) return;
