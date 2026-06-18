@@ -36,6 +36,8 @@ const PROVIDERS = {
   },
 };
 const KALSHI_LIVE_EVENTS_URL = "https://polymarket-search-api.wkr0.workers.dev/kalshi/events";
+const KALSHI_LIVE_CONCURRENCY = 2;
+const KALSHI_LIVE_DELAY_MS = 350;
 
 const providerState = Object.fromEntries(
   Object.keys(PROVIDERS).map((name) => [
@@ -820,11 +822,36 @@ function updateKalshiOutcome(outcome, market, normFactor = 1) {
   updateThinState(outcome);
 }
 
+function delay(ms, signal) {
+  if (signal.aborted) return Promise.reject(new DOMException("Aborted", "AbortError"));
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(resolve, ms);
+    signal.addEventListener("abort", () => {
+      clearTimeout(timeout);
+      reject(new DOMException("Aborted", "AbortError"));
+    }, { once: true });
+  });
+}
+
+async function runLimited(items, concurrency, signal, task) {
+  let next = 0;
+  const workerCount = Math.min(concurrency, items.length);
+  const workers = Array.from({ length: workerCount }, async (_, workerIndex) => {
+    if (workerIndex > 0) await delay(workerIndex * 150, signal);
+    while (!signal.aborted && next < items.length) {
+      const item = items[next++];
+      await task(item);
+      if (!signal.aborted && next < items.length) await delay(KALSHI_LIVE_DELAY_MS, signal);
+    }
+  });
+  await Promise.allSettled(workers);
+}
+
 async function refreshKalshiLivePrices(results, ctrl) {
   const targets = results.filter((r) => !r.ar && r.p === "kalshi" && r.s);
   if (!targets.length) return;
 
-  await Promise.allSettled(targets.map(async (r) => {
+  await runLimited(targets, KALSHI_LIVE_CONCURRENCY, ctrl.signal, async (r) => {
     const url = `${KALSHI_LIVE_EVENTS_URL}/${encodeURIComponent(r.s.toUpperCase())}`;
     const resp = await fetch(url, { signal: ctrl.signal });
     if (!resp.ok || ctrl.signal.aborted) return;
@@ -848,7 +875,7 @@ async function refreshKalshiLivePrices(results, ctrl) {
     r.v = Math.round(markets.reduce((sum, market) => sum + num(market.volume_24h_fp), 0));
     r.vt = Math.round(markets.reduce((sum, market) => sum + num(market.volume_fp), 0));
     r.mc = markets.length;
-  }));
+  });
 }
 
 function msDate(ms) {

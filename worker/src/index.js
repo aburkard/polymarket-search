@@ -6,6 +6,8 @@ const KALSHI_INDEX_URL = "https://aburkard.github.io/polymarket-search/search-da
 const KALSHI_ARCHIVED_INDEX_URL = "https://aburkard.github.io/polymarket-search/search-data-kalshi-archived.json";
 const KALSHI_API_BASE = "https://external-api.kalshi.com/trade-api/v2";
 const CACHE_TTL_MS = 5 * 60 * 1000;
+const KALSHI_LIVE_MAX_ATTEMPTS = 3;
+const KALSHI_RETRY_STATUSES = new Set([429, 500, 502, 503, 504]);
 
 const caches = new Map();
 const CORS_HEADERS = {
@@ -87,25 +89,62 @@ function parseKalshiEventTicker(pathname) {
   return match ? match[1].toUpperCase() : "";
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function retryAfterMs(value) {
+  if (!value) return 0;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+  const dateMs = Date.parse(value);
+  return Number.isFinite(dateMs) ? Math.max(dateMs - Date.now(), 0) : 0;
+}
+
+function kalshiRetryDelay(resp, attempt) {
+  const retryAfter = retryAfterMs(resp.headers.get("Retry-After"));
+  if (retryAfter > 0) return Math.min(retryAfter, 5000);
+  return Math.min(3000, 600 * 2 ** attempt) + Math.floor(Math.random() * 250);
+}
+
+async function fetchKalshiEvent(upstream) {
+  let resp = null;
+  for (let attempt = 0; attempt < KALSHI_LIVE_MAX_ATTEMPTS; attempt += 1) {
+    resp = await fetch(upstream, {
+      headers: {
+        "User-Agent": "market-search-live/0.1 (andrewburkard@gmail.com)",
+      },
+      cf: {
+        cacheEverything: true,
+        cacheTtl: 10,
+      },
+    });
+
+    const shouldRetry =
+      KALSHI_RETRY_STATUSES.has(resp.status) && attempt < KALSHI_LIVE_MAX_ATTEMPTS - 1;
+    if (!shouldRetry) return resp;
+
+    try {
+      await resp.body?.cancel();
+    } catch (_) {
+      // Ignore cancellation errors; the response is being discarded before retry.
+    }
+    await sleep(kalshiRetryDelay(resp, attempt));
+  }
+  return resp;
+}
+
 async function kalshiEventResponse(ticker) {
   if (!ticker) {
     return jsonResponse({ error: "Missing Kalshi event ticker" }, 400);
   }
 
   const upstream = `${KALSHI_API_BASE}/events/${encodeURIComponent(ticker)}?with_nested_markets=true`;
-  const resp = await fetch(upstream, {
-    headers: {
-      "User-Agent": "market-search-live/0.1 (andrewburkard@gmail.com)",
-    },
-    cf: {
-      cacheEverything: true,
-      cacheTtl: 5,
-    },
-  });
+  const resp = await fetchKalshiEvent(upstream);
 
   const headers = new Headers({
     "Content-Type": resp.headers.get("Content-Type") || "application/json; charset=utf-8",
-    "Cache-Control": "public, max-age=5, stale-while-revalidate=20",
+    "Cache-Control": "public, max-age=10, stale-while-revalidate=60",
     ...CORS_HEADERS,
   });
   const retryAfter = resp.headers.get("Retry-After");
