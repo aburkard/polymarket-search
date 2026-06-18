@@ -25,7 +25,7 @@ curl 'https://polymarket-search-api.<your-subdomain>.workers.dev/kalshi/events/K
 
 ## How it works
 
-The worker fetches provider-specific search indexes from GitHub Pages on cold start, caches them in memory for 5 minutes, and runs the same `search()` function as the browser frontend. Cloudflare's CDN also caches the upstream fetch.
+The worker fetches provider-specific search indexes from GitHub Pages on cold start, caches them in memory for 5 minutes, and runs the same `search()` function as the browser frontend. Cloudflare's CDN also caches the upstream fetch. The Kalshi live event route is a narrow CORS proxy that returns the current markets for an event ticker so the static UI can refresh visible prices.
 
 The `/kalshi/events/:ticker` route is a narrow CORS proxy for live Kalshi event payloads. It streams Kalshi's public event response and caches it for a few seconds so the static frontend can show fresh visible-card prices without calling Kalshi directly from the browser.
 

@@ -139,7 +139,7 @@ async function kalshiEventResponse(ticker) {
     return jsonResponse({ error: "Missing Kalshi event ticker" }, 400);
   }
 
-  const upstream = `${KALSHI_API_BASE}/events/${encodeURIComponent(ticker)}?with_nested_markets=true`;
+  const upstream = `${KALSHI_API_BASE}/markets?event_ticker=${encodeURIComponent(ticker)}&limit=100`;
   const resp = await fetchKalshiEvent(upstream);
 
   const headers = new Headers({
