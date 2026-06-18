@@ -4,9 +4,15 @@ const INDEX_URL = "https://aburkard.github.io/polymarket-search/search-data.json
 const ARCHIVED_INDEX_URL = "https://aburkard.github.io/polymarket-search/search-data-archived.json";
 const KALSHI_INDEX_URL = "https://aburkard.github.io/polymarket-search/search-data-kalshi.json";
 const KALSHI_ARCHIVED_INDEX_URL = "https://aburkard.github.io/polymarket-search/search-data-kalshi-archived.json";
+const KALSHI_API_BASE = "https://external-api.kalshi.com/trade-api/v2";
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 const caches = new Map();
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
 
 function expandImages(data) {
   const pfx = data.imgPfx || "";
@@ -71,9 +77,44 @@ function jsonResponse(body, status = 200) {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "public, max-age=60",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      ...CORS_HEADERS,
     },
+  });
+}
+
+function parseKalshiEventTicker(pathname) {
+  const match = pathname.match(/^\/kalshi\/events\/([A-Za-z0-9_-]{3,100})$/);
+  return match ? match[1].toUpperCase() : "";
+}
+
+async function kalshiEventResponse(ticker) {
+  if (!ticker) {
+    return jsonResponse({ error: "Missing Kalshi event ticker" }, 400);
+  }
+
+  const upstream = `${KALSHI_API_BASE}/events/${encodeURIComponent(ticker)}?with_nested_markets=true`;
+  const resp = await fetch(upstream, {
+    headers: {
+      "User-Agent": "market-search-live/0.1 (andrewburkard@gmail.com)",
+    },
+    cf: {
+      cacheEverything: true,
+      cacheTtl: 5,
+    },
+  });
+
+  const headers = new Headers({
+    "Content-Type": resp.headers.get("Content-Type") || "application/json; charset=utf-8",
+    "Cache-Control": "public, max-age=5, stale-while-revalidate=20",
+    ...CORS_HEADERS,
+  });
+  const retryAfter = resp.headers.get("Retry-After");
+  if (retryAfter) headers.set("Retry-After", retryAfter);
+
+  return new Response(resp.body, {
+    status: resp.status,
+    statusText: resp.statusText,
+    headers,
   });
 }
 
@@ -82,8 +123,7 @@ export default {
     if (request.method === "OPTIONS") {
       return new Response(null, {
         headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, OPTIONS",
+          ...CORS_HEADERS,
           "Access-Control-Max-Age": "86400",
         },
       });
@@ -94,6 +134,11 @@ export default {
     }
 
     const url = new URL(request.url);
+    const kalshiTicker = parseKalshiEventTicker(url.pathname);
+    if (url.pathname.startsWith("/kalshi/events/")) {
+      return kalshiEventResponse(kalshiTicker);
+    }
+
     const query = url.searchParams.get("q") || "";
     const limit = Math.min(
       Math.max(parseInt(url.searchParams.get("limit") || "20", 10), 1),
@@ -111,6 +156,7 @@ export default {
           trending: `${url.origin}/?trending=1&limit=20`,
           archivedSearch: `${url.origin}/?q=YOUR_QUERY&archived=1`,
           kalshiArchivedSearch: `${url.origin}/?q=YOUR_QUERY&provider=kalshi&archived=1`,
+          kalshiLiveEvent: `${url.origin}/kalshi/events/KXBTC-26JUN`,
         },
         parameters: {
           q: "search query string. Supports typos, abbreviations, nicknames.",

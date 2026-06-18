@@ -384,6 +384,7 @@ def normalize_event(
 
         markets.append({
             "id": market_ticker,
+            "liveId": market_ticker,
             "question": market.get("title") or event.get("title") or "",
             "slug": market_ticker.lower(),
             "closed": closed,

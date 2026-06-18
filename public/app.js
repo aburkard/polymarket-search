@@ -35,6 +35,7 @@ const PROVIDERS = {
     supportsArchived: false,
   },
 };
+const KALSHI_LIVE_EVENTS_URL = "https://polymarket-search-api.wkr0.workers.dev/kalshi/events";
 
 const providerState = Object.fromEntries(
   Object.keys(PROVIDERS).map((name) => [
@@ -737,52 +738,233 @@ function updateThinState(outcome) {
   }
 }
 
-async function refreshLivePrices(results) {
-  if (refreshAbort) refreshAbort.abort();
-  const ctrl = new AbortController();
-  refreshAbort = ctrl;
+function round4(value) {
+  return Math.round(value * 10000) / 10000;
+}
 
+function num(value, fallback = 0) {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function normalizedLabel(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function centsPrice(value) {
+  const n = num(value, NaN);
+  if (!Number.isFinite(n)) return null;
+  return n > 1 ? n / 100 : n;
+}
+
+function kalshiBestPrice(market) {
+  const bid = centsPrice(market.yes_bid_dollars);
+  const ask = centsPrice(market.yes_ask_dollars);
+  const last = centsPrice(market.last_price_dollars) || 0;
+
+  if (bid == null && ask == null) return last;
+  const safeBid = bid ?? 0;
+  const safeAsk = ask ?? 1;
+  const mid = round4((safeBid + safeAsk) / 2);
+  const spread = safeAsk - safeBid;
+  const volume = num(market.volume_fp);
+
+  if (spread < 0.05) return mid;
+  if (volume >= 1000 && last > 0) return Math.max(safeBid, last);
+  if (safeBid > 0) return safeBid;
+  return last || 0;
+}
+
+function activeKalshiMarkets(markets) {
+  const inactive = new Set(["closed", "settled", "expired", "finalized"]);
+  return (markets || []).filter((market) => !inactive.has(String(market.status || "").toLowerCase()));
+}
+
+function findKalshiMarket(outcome, markets) {
+  if (outcome.id) {
+    const byId = markets.find((market) => market.ticker === outcome.id);
+    if (byId) return byId;
+  }
+
+  const outcomeLabels = [
+    outcome.l,
+    outcome.q,
+  ].map(normalizedLabel).filter(Boolean);
+  if (!outcomeLabels.length && markets.length === 1) return markets[0];
+
+  return markets.find((market) => {
+    const labels = [
+      market.yes_sub_title,
+      market.subtitle,
+      market.title,
+    ].map(normalizedLabel).filter(Boolean);
+    return labels.some((label) => outcomeLabels.includes(label));
+  });
+}
+
+function updateKalshiOutcome(outcome, market, normFactor = 1) {
+  const best = kalshiBestPrice(market);
+  const p = normFactor > 0 ? best / normFactor : best;
+  outcome.op = [round4(Math.min(Math.max(p, 0), 1))];
+  if ((outcome.op[0] ?? 0) <= 1) outcome.op[1] = round4(1 - outcome.op[0]);
+
+  const bid = centsPrice(market.yes_bid_dollars);
+  const ask = centsPrice(market.yes_ask_dollars);
+  const last = centsPrice(market.last_price_dollars);
+  if (bid != null) outcome.bid = round4(bid);
+  if (ask != null) outcome.ask = round4(ask);
+  if (last != null) outcome.last = round4(last);
+  updateThinState(outcome);
+}
+
+async function refreshKalshiLivePrices(results, ctrl) {
+  const targets = results.filter((r) => !r.ar && r.p === "kalshi" && r.s);
+  if (!targets.length) return;
+
+  await Promise.allSettled(targets.map(async (r) => {
+    const url = `${KALSHI_LIVE_EVENTS_URL}/${encodeURIComponent(r.s.toUpperCase())}`;
+    const resp = await fetch(url, { signal: ctrl.signal });
+    if (!resp.ok || ctrl.signal.aborted) return;
+    const payload = await resp.json();
+    const event = payload.event || payload;
+    const markets = activeKalshiMarkets(event.markets || payload.markets || []);
+    if (!markets.length) return;
+
+    const isExclusive = Boolean(event.mutually_exclusive);
+    const bestPrices = markets.map(kalshiBestPrice);
+    const meaningful = bestPrices.filter((p) => p > 0.005);
+    const normFactor = isExclusive && meaningful.length > 1
+      ? meaningful.reduce((sum, p) => sum + p, 0)
+      : 1;
+
+    for (const outcome of r.mk || []) {
+      const match = findKalshiMarket(outcome, markets);
+      if (match) updateKalshiOutcome(outcome, match, normFactor);
+    }
+
+    r.v = Math.round(markets.reduce((sum, market) => sum + num(market.volume_24h_fp), 0));
+    r.vt = Math.round(markets.reduce((sum, market) => sum + num(market.volume_fp), 0));
+    r.mc = markets.length;
+  }));
+}
+
+function msDate(ms) {
+  const value = Number(ms);
+  if (!Number.isFinite(value) || value <= 0) return "";
+  return new Date(value).toISOString().slice(0, 10);
+}
+
+function manifoldAnswerProbability(answer) {
+  return round4(Math.min(Math.max(num(answer.probability ?? answer.p), 0), 1));
+}
+
+function manifoldAnswerOutcome(answer) {
+  const p = manifoldAnswerProbability(answer);
+  const outcome = {
+    id: String(answer.id || answer.text || ""),
+    l: String(answer.text || answer.name || answer.id || ""),
+    op: [p],
+    v: Math.round(num(answer.volume)),
+  };
+  if (answer.imageUrl || answer.avatarUrl) outcome.im = answer.imageUrl || answer.avatarUrl;
+  return outcome;
+}
+
+async function refreshManifoldLivePrices(results, ctrl) {
+  const targets = results.filter((r) => !r.ar && r.p === "manifold" && r.s);
+  if (!targets.length) return;
+
+  await Promise.allSettled(targets.map(async (r) => {
+    const url = `https://api.manifold.markets/v0/slug/${encodeURIComponent(r.s)}`;
+    const resp = await fetch(url, { signal: ctrl.signal });
+    if (!resp.ok || ctrl.signal.aborted) return;
+    const market = await resp.json();
+    if (market.isResolved) return;
+
+    const answers = Array.isArray(market.answers) ? market.answers : [];
+    if (answers.length) {
+      const liveOutcomes = answers
+        .map(manifoldAnswerOutcome)
+        .filter((outcome) => outcome.l)
+        .sort((a, b) => (b.op?.[0] || 0) - (a.op?.[0] || 0) || (b.v || 0) - (a.v || 0));
+
+      if (liveOutcomes.length) {
+        r.mk = liveOutcomes.slice(0, 12);
+        r.mc = answers.length;
+      }
+    } else {
+      const p = round4(Math.min(Math.max(num(market.probability ?? market.p), 0), 1));
+      const outcome = (r.mk || [])[0];
+      if (outcome && Number.isFinite(p)) {
+        outcome.op = [p, round4(1 - p)];
+      }
+    }
+
+    r.v = Math.round(num(market.volume24Hours));
+    r.vt = Math.round(num(market.volume));
+    r.tk = market.token || r.tk;
+    const closeDate = msDate(market.closeTime);
+    if (closeDate) r.ed = closeDate;
+  }));
+}
+
+async function refreshPolymarketLivePrices(results, ctrl) {
   const slugs = results
     .filter((r) => !r.ar && !r.p)
     .map((r) => r.s)
     .filter(Boolean);
   if (!slugs.length) return;
 
-  try {
-    const url = "https://gamma-api.polymarket.com/events?" +
-      slugs.map((s) => `slug=${encodeURIComponent(s)}`).join("&");
-    const resp = await fetch(url, { signal: ctrl.signal });
-    if (!resp.ok || ctrl.signal.aborted) return;
-    const events = await resp.json();
+  const url = "https://gamma-api.polymarket.com/events?" +
+    slugs.map((s) => `slug=${encodeURIComponent(s)}`).join("&");
+  const resp = await fetch(url, { signal: ctrl.signal });
+  if (!resp.ok || ctrl.signal.aborted) return;
+  const events = await resp.json();
 
-    const bySlug = {};
-    for (const ev of events) bySlug[ev.slug] = ev;
+  const bySlug = {};
+  for (const ev of events) bySlug[ev.slug] = ev;
 
-    for (const r of results) {
-      const live = bySlug[r.s];
-      if (!live) continue;
+  for (const r of results) {
+    const live = bySlug[r.s];
+    if (!live) continue;
 
-      if (live.live) r.live = true;
-      if (live.score) r.sc = live.score;
-      if (live.period) r.per = live.period;
+    if (live.live) r.live = true;
+    if (live.score) r.sc = live.score;
+    if (live.period) r.per = live.period;
 
-      const liveMarkets = (live.markets || []).filter((m) => !m.closed);
-      for (const mk of r.mk || []) {
-        const match = liveMarkets.find(
-          (m) => m.groupItemTitle === mk.l || m.question === mk.q,
-        );
-        if (!match) continue;
-        const op = typeof match.outcomePrices === "string"
-          ? JSON.parse(match.outcomePrices)
-          : match.outcomePrices;
-        if (op?.[0] != null) mk.op = [parseFloat(op[0])];
-        if (op?.[1] != null) mk.op[1] = parseFloat(op[1]);
-        if (match.bestBid != null) mk.bid = parseFloat(match.bestBid);
-        if (match.bestAsk != null) mk.ask = parseFloat(match.bestAsk);
-        if (match.lastTradePrice != null) mk.last = parseFloat(match.lastTradePrice);
-        updateThinState(mk);
-      }
+    const liveMarkets = (live.markets || []).filter((m) => !m.closed);
+    for (const mk of r.mk || []) {
+      const match = liveMarkets.find(
+        (m) => m.groupItemTitle === mk.l || m.question === mk.q,
+      );
+      if (!match) continue;
+      const op = typeof match.outcomePrices === "string"
+        ? JSON.parse(match.outcomePrices)
+        : match.outcomePrices;
+      if (op?.[0] != null) mk.op = [parseFloat(op[0])];
+      if (op?.[1] != null) mk.op[1] = parseFloat(op[1]);
+      if (match.bestBid != null) mk.bid = parseFloat(match.bestBid);
+      if (match.bestAsk != null) mk.ask = parseFloat(match.bestAsk);
+      if (match.lastTradePrice != null) mk.last = parseFloat(match.lastTradePrice);
+      updateThinState(mk);
     }
+  }
+}
+
+async function refreshLivePrices(results) {
+  if (refreshAbort) refreshAbort.abort();
+  const ctrl = new AbortController();
+  refreshAbort = ctrl;
+
+  try {
+    await Promise.allSettled([
+      refreshPolymarketLivePrices(results, ctrl),
+      refreshKalshiLivePrices(results, ctrl),
+      refreshManifoldLivePrices(results, ctrl),
+    ]);
 
     if (!ctrl.signal.aborted && results === lastRendered) {
       resultsEl.innerHTML = results.map((r) => renderCard(r)).join("");

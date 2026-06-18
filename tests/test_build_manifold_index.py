@@ -81,6 +81,7 @@ class TestNormalizeManifoldMarket(unittest.TestCase):
         self.assertEqual(market["source"], "manifold")
         self.assertEqual(market["token"], "MANA")
         self.assertIn({"label": "Crypto"}, market["tags"])
+        self.assertEqual(market["markets"][0]["liveId"], "btc1")
         self.assertEqual(market["markets"][0]["outcomePrices"], "[0.42, 0.58]")
 
     def test_normalizes_multiple_choice_answers_from_detail_payload(self):
@@ -94,6 +95,7 @@ class TestNormalizeManifoldMarket(unittest.TestCase):
         assert market is not None
         self.assertEqual(len(market["markets"]), 3)
         self.assertEqual(market["markets"][0]["groupItemTitle"], "France")
+        self.assertEqual(market["markets"][0]["liveId"], "fr")
         self.assertEqual(market["markets"][0]["outcomePrices"], "[0.18]")
         self.assertIn({"label": "Sports"}, market["tags"])
         self.assertIn({"label": "World Cup"}, market["tags"])
@@ -126,6 +128,9 @@ class TestBuildManifoldIndex(unittest.TestCase):
         self.assertEqual(btc["u"], SAMPLE_BINARY["url"])
         self.assertEqual(btc["tk"], "MANA")
         self.assertEqual(btc["vt"], 1234)
+        self.assertEqual(btc["mk"][0]["id"], "btc1")
+        world_cup = docs_by_slug[SAMPLE_MULTI["slug"]]
+        self.assertEqual(world_cup["mk"][0]["id"], "fr")
         self.assertIn("bitcoin", data["idx"])
         self.assertIn("world", data["idx"])
 

@@ -186,6 +186,13 @@ class TestBuildKalshiIndex(unittest.TestCase):
             SAMPLE_KALSHI_METADATA["market_details"][0]["image_url"],
         )
 
+    def test_keeps_live_market_ids_for_browser_refresh(self):
+        events = normalize_events([SAMPLE_KALSHI_EVENT])
+        data = build_index(events)
+
+        self.assertEqual(doc_id := data["docs"][0]["mk"][0]["id"], "KXBTC-26JUN-T100000")
+        self.assertEqual(doc_id, events[0]["markets"][0]["liveId"])
+
     def test_adds_topic_metadata_from_kalshi_ticker(self):
         event = {
             "event_ticker": "KXMLBGAME-26JUN101840MINDET",

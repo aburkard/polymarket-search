@@ -426,6 +426,9 @@ def build_index(
             mimg = m.get("image") or m.get("icon") or ""
             if mimg and mimg != ev.get("image", ""):
                 o["im"] = mimg
+            live_id = m.get("liveId")
+            if live_id:
+                o["id"] = str(live_id)
             outcomes.append(o)
 
         doc = {
