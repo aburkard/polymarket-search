@@ -25,5 +25,8 @@ jobs:
       - name: Check app syntax
         run: node --check public/app.js
 
+      - name: Check worker syntax
+        run: node --check worker/src/index.js
+
       - name: Run Python tests
         run: npm run test:python

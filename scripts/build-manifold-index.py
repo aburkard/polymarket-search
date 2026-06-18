@@ -327,6 +327,7 @@ def normalize_market(
             probability = _answer_probability(answer)
             markets.append({
                 "id": answer.get("id") or f"{market.get('id')}:{label}",
+                "liveId": answer.get("id") or f"{market.get('id')}:{label}",
                 "question": title,
                 "slug": str(answer.get("id") or label).lower(),
                 "closed": False,
@@ -341,6 +342,7 @@ def normalize_market(
         probability = _probability(market.get("probability", market.get("p")))
         markets.append({
             "id": market.get("id") or slug,
+            "liveId": market.get("id") or slug,
             "question": title,
             "slug": slug,
             "closed": False,
