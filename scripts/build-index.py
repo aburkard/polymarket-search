@@ -81,40 +81,48 @@ def fetch_all_events(
     max_pages: int = 0,
 ) -> list[dict]:
     events = []
-    offset = 0
+    cursor = ""
     pages = 0
     while True:
-        qs = urllib.parse.urlencode({
+        params = {
             "active": active,
             "closed": closed,
             "limit": page_size,
-            "offset": offset,
-        })
-        url = f"{BASE}/events?{qs}"
+        }
+        if cursor:
+            params["after_cursor"] = cursor
+        qs = urllib.parse.urlencode(params)
+        url = f"{BASE}/events/keyset?{qs}"
         req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
         try:
             with urllib.request.urlopen(req, timeout=60) as resp:
                 page = json.loads(resp.read())
         except Exception as e:
-            print(f"  ERROR at offset={offset}: {e}", file=sys.stderr)
+            print(f"  ERROR at page={pages + 1}: {e}", file=sys.stderr)
             if not events:
                 raise
             print(f"  Stopping early with {len(events)} events", file=sys.stderr)
             break
 
-        if not isinstance(page, list) or not page:
+        if isinstance(page, dict):
+            got = page.get("events") or []
+            cursor = page.get("next_cursor") or ""
+        else:
+            got = page
+            cursor = ""
+
+        if not isinstance(got, list) or not got:
             break
 
-        events.extend(page)
-        print(f"  fetched offset={offset} got={len(page)} total={len(events)}")
-
+        events.extend(got)
         pages += 1
-        if len(page) < page_size:
+        print(f"  fetched page={pages} got={len(got)} total={len(events)}")
+
+        if len(got) < page_size or not cursor:
             break
         if max_pages and pages >= max_pages:
             print(f"  Reached max pages ({max_pages})")
             break
-        offset += page_size
 
     return events
 
