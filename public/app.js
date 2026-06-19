@@ -638,18 +638,20 @@ function renderSportCard(r, url) {
   const away = r.tm[0] || {};
   const home = r.tm[1] || {};
 
-  const moneyline = (r.mk || []).find((m) => {
-    const q = (m.q || m.l || "").toLowerCase();
-    return (
-      !q.includes("spread") &&
-      !q.includes("o/u") &&
-      !q.includes(":") &&
-      !q.includes("odd/even") &&
-      !q.includes("team to")
-    );
-  });
-  const awayPct = moneyline?.op?.[0] != null ? Math.round(moneyline.op[0] * 100) : null;
-  const homePct = moneyline?.op?.[1] != null ? Math.round(moneyline.op[1] * 100) : null;
+  const awayML = findTeamMoneyline(r, away);
+  const homeML = findTeamMoneyline(r, home);
+  const hasDraw = hasDrawMoneyline(r);
+  const canUseBinaryComplement = !hasDraw && (r.mc || 0) <= 2;
+  let awayPrice = awayML?.op?.[0];
+  let homePrice = homeML?.op?.[0];
+  if (awayPrice == null && homeML?.op?.[1] != null && canUseBinaryComplement) {
+    awayPrice = homeML.op[1];
+  }
+  if (homePrice == null && awayML?.op?.[1] != null && canUseBinaryComplement) {
+    homePrice = awayML.op[1];
+  }
+  const awayPct = awayPrice != null ? Math.round(awayPrice * 100) : null;
+  const homePct = homePrice != null ? Math.round(homePrice * 100) : null;
 
   const spreadMkt = (r.mk || []).find((m) => (m.l || "").toLowerCase().startsWith("spread"));
   const totalMkt = (r.mk || []).find((m) => (m.l || "").toLowerCase().startsWith("o/u") && !(m.l || "").toLowerCase().startsWith("1h"));
@@ -721,6 +723,41 @@ function renderSportCard(r, url) {
     </div>
     <div class="result-meta">${meta.join('<span class="meta-sep"></span>')}</div>
   </a>`;
+}
+
+function findTeamMoneyline(r, team) {
+  const aliases = teamAliases(team);
+  if (!aliases.length) return null;
+  return (r.mk || []).find((m) => {
+    const q = (m.q || m.l || "").toLowerCase();
+    if (
+      q.includes("spread") ||
+      q.includes("o/u") ||
+      q.includes(":") ||
+      q.includes("odd/even") ||
+      q.includes("team to")
+    ) {
+      return false;
+    }
+    const label = normalizedLabel(m.l);
+    const question = normalizedLabel(m.q);
+    return aliases.some((alias) =>
+      label === alias ||
+      question.startsWith(`will ${alias} win`) ||
+      ` ${question} `.includes(` ${alias} win `)
+    );
+  });
+}
+
+function teamAliases(team) {
+  return [
+    normalizedLabel(team?.n),
+    normalizedLabel(team?.abbr),
+  ].filter(Boolean);
+}
+
+function hasDrawMoneyline(r) {
+  return (r.mk || []).some((m) => ` ${normalizedLabel(`${m.l || ""} ${m.q || ""}`)} `.includes(" draw "));
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -944,6 +981,50 @@ async function refreshManifoldLivePrices(results, ctrl) {
   }));
 }
 
+function parsePolymarketOutcomePrices(raw) {
+  if (!raw) return [];
+  try {
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((value) => round4(num(value, NaN)))
+      .filter(Number.isFinite);
+  } catch (_) {
+    return [];
+  }
+}
+
+function polymarketBestPrice(market) {
+  const prices = parsePolymarketOutcomePrices(market.outcomePrices);
+  const mid = prices[0] || 0;
+  if (market.bestBid == null && market.bestAsk == null) return mid;
+
+  const bid = num(market.bestBid);
+  const ask = num(market.bestAsk, 1);
+  const spread = ask - bid;
+  const last = num(market.lastTradePrice);
+  const volume = num(market.volume);
+
+  if (spread < 0.05) return mid;
+  if (volume >= 1000 && last > 0) return Math.max(bid, last);
+  if (bid > 0) return bid;
+  return 0;
+}
+
+function polymarketDisplayPrices(market, normFactor = 1) {
+  const raw = parsePolymarketOutcomePrices(market.outcomePrices);
+  const best = polymarketBestPrice(market);
+  if (normFactor > 0 && normFactor !== 1) {
+    const p = round4(Math.min(Math.max(best / normFactor, 0), 1));
+    return raw.length > 1 ? [p, round4(1 - p)] : [p];
+  }
+  if (best !== (raw[0] || 0)) {
+    const p = round4(Math.min(Math.max(best, 0), 1));
+    return raw.length > 1 ? [p, round4(1 - p)] : [p];
+  }
+  return raw;
+}
+
 async function refreshPolymarketLivePrices(results, ctrl) {
   const slugs = results
     .filter((r) => !r.ar && !r.p)
@@ -969,16 +1050,18 @@ async function refreshPolymarketLivePrices(results, ctrl) {
     if (live.period) r.per = live.period;
 
     const liveMarkets = (live.markets || []).filter((m) => !m.closed);
+    const isExclusive = Boolean(live.negRisk || live.enableNegRisk);
+    const bestPrices = liveMarkets.map(polymarketBestPrice);
+    const meaningful = bestPrices.filter((p) => p > 0.005);
+    const normFactor = isExclusive && meaningful.length > 1
+      ? meaningful.reduce((sum, p) => sum + p, 0)
+      : 1;
     for (const mk of r.mk || []) {
       const match = liveMarkets.find(
         (m) => m.groupItemTitle === mk.l || m.question === mk.q,
       );
       if (!match) continue;
-      const op = typeof match.outcomePrices === "string"
-        ? JSON.parse(match.outcomePrices)
-        : match.outcomePrices;
-      if (op?.[0] != null) mk.op = [parseFloat(op[0])];
-      if (op?.[1] != null) mk.op[1] = parseFloat(op[1]);
+      mk.op = polymarketDisplayPrices(match, normFactor);
       if (match.bestBid != null) mk.bid = parseFloat(match.bestBid);
       if (match.bestAsk != null) mk.ask = parseFloat(match.bestAsk);
       if (match.lastTradePrice != null) mk.last = parseFloat(match.lastTradePrice);

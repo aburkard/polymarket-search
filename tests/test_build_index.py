@@ -157,6 +157,36 @@ EXCLUSIVE_WITH_DEAD = {
 }
 
 
+SPORT_DRAW_EVENT = {
+    "id": "20",
+    "title": "United States vs. Australia",
+    "slug": "fifwc-usa-aus-2026-06-19",
+    "negRisk": True,
+    "enableNegRisk": True,
+    "sport": {"sport": "fifwc"},
+    "eventDate": "2026-06-19",
+    "tags": [{"label": "Sports"}, {"label": "Soccer"}],
+    "teams": [
+        {"name": "United States", "logo": "us.png", "record": "0-0", "abbreviation": "usa"},
+        {"name": "Australia", "logo": "au.png", "record": "0-0", "abbreviation": "aus"},
+    ],
+    "markets": [
+        {"id": "2001", "question": "Will United States vs. Australia end in a draw?", "slug": "draw",
+         "closed": False, "volume": "258", "volume24hr": "0", "groupItemTitle": "Draw (United States vs. Australia)",
+         "outcomePrices": '["0.245", "0.755"]', "bestBid": "0.24", "bestAsk": "0.25", "lastTradePrice": "0.25",
+         "endDate": "2026-06-19T00:00:00Z", "image": ""},
+        {"id": "2002", "question": "Will Australia win on 2026-06-19?", "slug": "aus",
+         "closed": False, "volume": "148", "volume24hr": "0", "groupItemTitle": "Australia",
+         "outcomePrices": '["0.20", "0.80"]', "bestBid": "0.19", "bestAsk": "0.21", "lastTradePrice": "0.21",
+         "endDate": "2026-06-19T00:00:00Z", "image": ""},
+        {"id": "2003", "question": "Will United States win on 2026-06-19?", "slug": "usa",
+         "closed": False, "volume": "441", "volume24hr": "103", "groupItemTitle": "United States",
+         "outcomePrices": '["0.565", "0.435"]', "bestBid": "0.55", "bestAsk": "0.58", "lastTradePrice": "0.58",
+         "endDate": "2026-06-19T00:00:00Z", "image": ""},
+    ],
+}
+
+
 THRESHOLD_EVENT = {
     "id": "13",
     "title": "What price will Ethereum hit in 2026?",
@@ -472,6 +502,21 @@ class TestNormalization(unittest.TestCase):
         m = doc["mk"][0]
         self.assertNotIn("bid", m)
         self.assertNotIn("last", m)
+
+    def test_sports_moneyline_uses_each_team_yes_market(self):
+        """Draw-capable sports cards should not label a binary No price as the other team."""
+        data = build_index([SPORT_DRAW_EVENT])
+        doc = data["docs"][0]
+        by_label = {m["l"]: m for m in doc["mk"]}
+
+        self.assertEqual([m["l"] for m in doc["mk"][:3]], [
+            "United States",
+            "Australia",
+            "Draw (United States vs. Australia)",
+        ])
+        self.assertAlmostEqual(by_label["United States"]["op"][0], 0.5594, places=4)
+        self.assertAlmostEqual(by_label["Australia"]["op"][0], 0.1980, places=4)
+        self.assertNotAlmostEqual(by_label["Australia"]["op"][0], 0.4406, places=3)
 
 
 if __name__ == "__main__":
