@@ -191,6 +191,39 @@ def _outcome_tier(m: dict, event_title: str) -> int:
     return 5
 
 
+def _norm_label(value: str | None) -> str:
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", str(value or "").lower()).split())
+
+
+def _team_aliases(team: dict) -> set[str]:
+    aliases = {
+        _norm_label(team.get("name")),
+        _norm_label(team.get("abbreviation")),
+    }
+    return {a for a in aliases if a}
+
+
+def _is_team_moneyline_market(m: dict, team: dict) -> bool:
+    aliases = _team_aliases(team)
+    if not aliases:
+        return False
+
+    label = _norm_label(m.get("groupItemTitle"))
+    if label in aliases:
+        return True
+
+    question = _norm_label(m.get("question"))
+    return any(
+        question.startswith(f"will {alias} win") or f" {alias} win " in f" {question} "
+        for alias in aliases
+    )
+
+
+def _is_draw_moneyline_market(m: dict) -> bool:
+    text = _norm_label(f"{m.get('groupItemTitle', '')} {m.get('question', '')}")
+    return " draw " in f" {text} "
+
+
 def _closeness_to_even(m: dict) -> float:
     prices = parse_outcome_prices(m.get("outcomePrices"))
     if not prices:
@@ -198,7 +231,11 @@ def _closeness_to_even(m: dict) -> float:
     return abs(prices[0] - 0.5)
 
 
-def pick_sports_outcomes(markets: list[dict], event_title: str) -> list[dict]:
+def pick_sports_outcomes(
+    markets: list[dict],
+    event_title: str,
+    teams: list[dict] | None = None,
+) -> list[dict]:
     by_tier: dict[int, list[dict]] = {}
     for m in markets:
         tier = _outcome_tier(m, event_title)
@@ -207,14 +244,43 @@ def pick_sports_outcomes(markets: list[dict], event_title: str) -> list[dict]:
         by_tier.setdefault(tier, []).append(m)
 
     picked: list[dict] = []
+    picked_ids: set[int] = set()
+
+    if teams:
+        for team in teams[:2]:
+            candidates = [m for m in markets if _is_team_moneyline_market(m, team)]
+            if candidates:
+                best = max(
+                    candidates,
+                    key=lambda m: float(m.get("volume24hr") or m.get("volume") or 0),
+                )
+                picked.append(best)
+                picked_ids.add(id(best))
+
+        draw_candidates = [m for m in markets if _is_draw_moneyline_market(m)]
+        if draw_candidates and picked:
+            best_draw = max(
+                draw_candidates,
+                key=lambda m: float(m.get("volume24hr") or m.get("volume") or 0),
+            )
+            picked.append(best_draw)
+            picked_ids.add(id(best_draw))
+
     for tier in sorted(by_tier):
+        if teams and tier in (0, 5):
+            continue
         candidates = by_tier[tier]
+        candidates = [m for m in candidates if id(m) not in picked_ids]
+        if not candidates:
+            continue
         if tier in (1, 2, 3):
             best = min(candidates, key=_closeness_to_even)
             picked.append(best)
+            picked_ids.add(id(best))
         else:
             candidates.sort(key=lambda m: -float(m.get("volume24hr") or 0))
             picked.append(candidates[0])
+            picked_ids.add(id(candidates[0]))
         if len(picked) >= 4:
             break
     return picked
@@ -388,7 +454,7 @@ def build_index(
         )
 
         if is_sports:
-            top_markets = pick_sports_outcomes(active_markets, event_title)
+            top_markets = pick_sports_outcomes(active_markets, event_title, ev.get("teams") or [])
         elif is_temporal:
             top_markets = sorted(
                 active_markets,
@@ -457,7 +523,12 @@ def build_index(
             teams = ev.get("teams") or []
             if teams:
                 doc["tm"] = [
-                    {"n": t.get("name", ""), "l": t.get("logo", ""), "r": t.get("record", "")}
+                    {
+                        "n": t.get("name", ""),
+                        "l": t.get("logo", ""),
+                        "r": t.get("record", ""),
+                        "abbr": t.get("abbreviation", ""),
+                    }
                     for t in teams[:2]
                 ]
             doc["gd"] = ev.get("eventDate") or ""
