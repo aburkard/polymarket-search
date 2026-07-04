@@ -187,6 +187,72 @@ SPORT_DRAW_EVENT = {
 }
 
 
+SPORT_NEXT_TEAM_EVENT = {
+    "id": "21",
+    "title": "NBA: LeBron James Next Team",
+    "slug": "lebron-james-next-team",
+    "negRisk": True,
+    "enableNegRisk": True,
+    "sport": {"sport": "nba"},
+    "tags": [{"label": "Sports"}, {"label": "NBA"}],
+    "teams": [
+        {"name": "Cleveland Cavaliers", "abbreviation": "cle"},
+        {"name": "Golden State Warriors", "abbreviation": "gsw"},
+    ],
+    "markets": [
+        {"id": "2101", "question": "Will LeBron James play for the Cleveland Cavaliers next?",
+         "slug": "cle", "closed": False, "volume": "100000", "volume24hr": "1000",
+         "groupItemTitle": "Cleveland Cavaliers", "groupItemThreshold": "0",
+         "outcomePrices": '["0.42", "0.58"]',
+         "endDate": "2026-10-31T00:00:00Z", "image": ""},
+        {"id": "2102", "question": "Will LeBron James play for the Golden State Warriors next?",
+         "slug": "gsw", "closed": False, "volume": "100000", "volume24hr": "1000",
+         "groupItemTitle": "Golden State Warriors", "groupItemThreshold": "1",
+         "outcomePrices": '["0.19", "0.81"]',
+         "endDate": "2026-10-31T00:00:00Z", "image": ""},
+        {"id": "2103", "question": "Will LeBron James play for the Denver Nuggets next?",
+         "slug": "den", "closed": False, "volume": "100000", "volume24hr": "5000",
+         "groupItemTitle": "Denver Nuggets", "groupItemThreshold": "2",
+         "outcomePrices": '["0.03", "0.97"]',
+         "endDate": "2026-10-31T00:00:00Z", "image": ""},
+        {"id": "2104", "question": "Will LeBron James play for the Philadelphia 76ers next?",
+         "slug": "phi", "closed": False, "volume": "100000", "volume24hr": "1000",
+         "groupItemTitle": "Philadelphia 76ers", "groupItemThreshold": "3",
+         "outcomePrices": '["0.11", "0.89"]',
+         "endDate": "2026-10-31T00:00:00Z", "image": ""},
+    ],
+}
+
+
+SPORT_SINGLE_MONEYLINE_EVENT = {
+    "id": "22",
+    "title": "Knicks vs. Cavaliers",
+    "slug": "nba-nyk-cle-2026-05-25",
+    "sport": {"sport": "nba"},
+    "teams": [
+        {"name": "Knicks", "abbreviation": "nyk"},
+        {"name": "Cavaliers", "abbreviation": "cle"},
+    ],
+    "markets": [
+        {"id": "2201", "question": "Will the Knicks beat the Cavaliers?",
+         "slug": "nyk-cle", "closed": False, "volume": "100000", "volume24hr": "1000",
+         "groupItemTitle": "Knicks vs. Cavaliers", "groupItemThreshold": "0",
+         "outcomePrices": '["0.53", "0.47"]',
+         "endDate": "2026-05-25T00:00:00Z", "image": ""},
+        {"id": "2202", "question": "Will Knicks vs. Cavaliers clear the spread?",
+         "slug": "spread", "closed": False, "volume": "100000", "volume24hr": "1000",
+         "groupItemTitle": "Spread -1.5", "groupItemThreshold": "1",
+         "outcomePrices": '["0.51", "0.49"]',
+         "endDate": "2026-05-25T00:00:00Z", "image": ""},
+        {"id": "2203", "question": "Will Knicks vs. Cavaliers go over 218.5?",
+         "slug": "total", "closed": False, "volume": "100000", "volume24hr": "1000",
+         "groupItemTitle": "O/U 218.5", "groupItemThreshold": "2",
+         "outcomePrices": '["0.49", "0.51"]',
+         "endDate": "2026-05-25T00:00:00Z", "image": ""},
+    ],
+}
+
+
 THRESHOLD_EVENT = {
     "id": "13",
     "title": "What price will Ethereum hit in 2026?",
@@ -517,6 +583,31 @@ class TestNormalization(unittest.TestCase):
         self.assertAlmostEqual(by_label["United States"]["op"][0], 0.5594, places=4)
         self.assertAlmostEqual(by_label["Australia"]["op"][0], 0.1980, places=4)
         self.assertNotAlmostEqual(by_label["Australia"]["op"][0], 0.4406, places=3)
+
+    def test_sports_future_uses_probability_order(self):
+        """Sports futures/props should not treat option indexes as ordered thresholds."""
+        data = build_index([SPORT_NEXT_TEAM_EVENT])
+        doc = data["docs"][0]
+
+        self.assertEqual([m["l"] for m in doc["mk"][:3]], [
+            "Cleveland Cavaliers",
+            "Golden State Warriors",
+            "Philadelphia 76ers",
+        ])
+        self.assertLess(
+            [m["l"] for m in doc["mk"]].index("Philadelphia 76ers"),
+            [m["l"] for m in doc["mk"]].index("Denver Nuggets"),
+        )
+
+    def test_sports_matchup_keeps_representative_markets(self):
+        """Two-team matchup cards should keep the sports-specific summary rows."""
+        data = build_index([SPORT_SINGLE_MONEYLINE_EVENT])
+        doc = data["docs"][0]
+
+        self.assertEqual([m["l"] for m in doc["mk"][:2]], [
+            "Spread -1.5",
+            "O/U 218.5",
+        ])
 
 
 if __name__ == "__main__":

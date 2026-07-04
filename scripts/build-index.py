@@ -286,6 +286,29 @@ def pick_sports_outcomes(
     return picked
 
 
+def _is_sports_matchup(event_title: str, teams: list[dict] | None = None) -> bool:
+    """True for normal two-side sports matchups, not futures/next-team props."""
+    if not teams or len(teams) != 2:
+        return False
+    return bool(re.search(r"\bvs\.?\b", event_title, flags=re.IGNORECASE))
+
+
+def _looks_ordered_label(label: str) -> bool:
+    value = str(label or "").strip().lower()
+    if re.match(r"^(?:[↓↑]|up|down|above|below|over|under|o/u)?\s*\$?-?\d", value):
+        return True
+    return bool(re.search(r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|q[1-4]|20\d\d)\b", value))
+
+
+def _is_temporal_outcome_group(event_title: str, markets: list[dict]) -> bool:
+    if len(markets) < 2 or not any(m.get("groupItemThreshold") is not None for m in markets):
+        return False
+    if not re.search(r"\.\.\.\?|___|\b(above|below|before|by|hit|price|reach|through|when)\b", event_title, flags=re.IGNORECASE):
+        return False
+    labels = [m.get("groupItemTitle") or "" for m in markets if m.get("groupItemTitle")]
+    return len(labels) >= 2 and all(_looks_ordered_label(label) for label in labels)
+
+
 def _best_price(m: dict) -> float:
     """Pick the most meaningful price for a market.
 
@@ -449,12 +472,11 @@ def build_index(
 
         is_sports = bool(ev.get("sport") or ev.get("teams"))
 
-        is_temporal = len(active_markets) >= 2 and any(
-            m.get("groupItemThreshold") is not None for m in active_markets
-        )
+        is_temporal = _is_temporal_outcome_group(event_title, active_markets)
 
-        if is_sports:
-            top_markets = pick_sports_outcomes(active_markets, event_title, ev.get("teams") or [])
+        teams = ev.get("teams") or []
+        if is_sports and _is_sports_matchup(event_title, teams):
+            top_markets = pick_sports_outcomes(active_markets, event_title, teams)
         elif is_temporal:
             top_markets = sorted(
                 active_markets,
