@@ -10,6 +10,7 @@ import {
   topByVolumeMany,
   topTagsForDocs,
 } from "./search.js?v=6";
+import { updatePolymarketOutcomes } from "./polymarket.js?v=1";
 
 const PROVIDERS = {
   polymarket: {
@@ -548,19 +549,17 @@ function renderCard(r) {
   if (outcomes.length === 1) {
     const p = outcomes[0].op?.[0];
     const pct = p != null ? Math.round(p * 100) : null;
-    if (pct != null) {
-      const yesLeads = pct >= 50;
-      const thin = outcomes[0].thin ? " is-thin" : "";
-      rowsHtml = `
+    const yesLeads = pct != null && pct >= 50;
+    const thin = outcomes[0].thin ? " is-thin" : "";
+    rowsHtml = `
         <div class="outcome-row ${yesLeads ? "" : "is-dim"}${thin}">
           <span class="outcome-label">Yes</span>
-          <span class="outcome-pct">${pct}%${priceTipHtml(outcomes[0])}</span>
+          <span class="outcome-pct">${pct == null ? "–" : `${pct}%`}${priceTipHtml(outcomes[0])}</span>
         </div>
         <div class="outcome-row ${yesLeads ? "is-dim is-no" : "is-no"}${thin}">
           <span class="outcome-label">No</span>
-          <span class="outcome-pct">${100 - pct}%</span>
+          <span class="outcome-pct">${pct == null ? "–" : `${100 - pct}%`}</span>
         </div>`;
-    }
   } else if (outcomes.length > 1) {
     const visible = outcomes.filter((o) => {
       const p = o.op?.[0];
@@ -981,50 +980,6 @@ async function refreshManifoldLivePrices(results, ctrl) {
   }));
 }
 
-function parsePolymarketOutcomePrices(raw) {
-  if (!raw) return [];
-  try {
-    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .map((value) => round4(num(value, NaN)))
-      .filter(Number.isFinite);
-  } catch (_) {
-    return [];
-  }
-}
-
-function polymarketBestPrice(market) {
-  const prices = parsePolymarketOutcomePrices(market.outcomePrices);
-  const mid = prices[0] || 0;
-  if (market.bestBid == null && market.bestAsk == null) return mid;
-
-  const bid = num(market.bestBid);
-  const ask = num(market.bestAsk, 1);
-  const spread = ask - bid;
-  const last = num(market.lastTradePrice);
-  const volume = num(market.volume);
-
-  if (spread < 0.05) return mid;
-  if (volume >= 1000 && last > 0) return Math.max(bid, last);
-  if (bid > 0) return bid;
-  return 0;
-}
-
-function polymarketDisplayPrices(market, normFactor = 1) {
-  const raw = parsePolymarketOutcomePrices(market.outcomePrices);
-  const best = polymarketBestPrice(market);
-  if (normFactor > 0 && normFactor !== 1) {
-    const p = round4(Math.min(Math.max(best / normFactor, 0), 1));
-    return raw.length > 1 ? [p, round4(1 - p)] : [p];
-  }
-  if (best !== (raw[0] || 0)) {
-    const p = round4(Math.min(Math.max(best, 0), 1));
-    return raw.length > 1 ? [p, round4(1 - p)] : [p];
-  }
-  return raw;
-}
-
 async function refreshPolymarketLivePrices(results, ctrl) {
   const slugs = results
     .filter((r) => !r.ar && !r.p)
@@ -1049,24 +1004,7 @@ async function refreshPolymarketLivePrices(results, ctrl) {
     if (live.score) r.sc = live.score;
     if (live.period) r.per = live.period;
 
-    const liveMarkets = (live.markets || []).filter((m) => !m.closed);
-    const isExclusive = Boolean(live.negRisk || live.enableNegRisk);
-    const bestPrices = liveMarkets.map(polymarketBestPrice);
-    const meaningful = bestPrices.filter((p) => p > 0.005);
-    const normFactor = isExclusive && meaningful.length > 1
-      ? meaningful.reduce((sum, p) => sum + p, 0)
-      : 1;
-    for (const mk of r.mk || []) {
-      const match = liveMarkets.find(
-        (m) => m.groupItemTitle === mk.l || m.question === mk.q,
-      );
-      if (!match) continue;
-      mk.op = polymarketDisplayPrices(match, normFactor);
-      if (match.bestBid != null) mk.bid = parseFloat(match.bestBid);
-      if (match.bestAsk != null) mk.ask = parseFloat(match.bestAsk);
-      if (match.lastTradePrice != null) mk.last = parseFloat(match.lastTradePrice);
-      updateThinState(mk);
-    }
+    updatePolymarketOutcomes(r, live);
   }
 }
 

@@ -339,6 +339,50 @@ def _best_price(m: dict) -> float:
     return 0
 
 
+def _valid_price(value) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        price = float(value)
+    except (ValueError, TypeError):
+        return None
+    return price if math.isfinite(price) and 0 <= price <= 1 else None
+
+
+def polymarket_display_prices(m: dict) -> list[float]:
+    """Midpoint through a 10¢ spread, last trade above it; never normalize.
+
+    Preserve settled prices. With incomplete quotes or no last trade, fall
+    back to the source price; missing data stays unavailable.
+    """
+    raw = m.get("outcomePrices") or []
+    try:
+        raw = json.loads(raw) if isinstance(raw, str) else raw
+    except (json.JSONDecodeError, TypeError):
+        raw = []
+    if not isinstance(raw, list):
+        raw = []
+    source = _valid_price(raw[0]) if raw else None
+    price = source
+    if not m.get("closed"):
+        bid = _valid_price(m.get("bestBid"))
+        ask = _valid_price(m.get("bestAsk"))
+        last = _valid_price(m.get("lastTradePrice"))
+        if bid is not None and ask is not None and bid <= ask:
+            if round(ask - bid, 10) <= 0.10:
+                price = (bid + ask) / 2
+            elif last is not None:
+                price = last
+        elif price is None:
+            price = last
+    if price is None:
+        return []
+    # Match JavaScript's Math.round so a refresh cannot change a half-tick.
+    price = math.floor(price * 10000 + 0.5) / 10000
+    complement = math.floor((1 - price) * 10000 + 0.5) / 10000
+    return [price] if len(raw) == 1 else [price, complement]
+
+
 STOP_WORDS = {
     "the", "be", "to", "of", "and", "in", "that", "have", "it", "for",
     "not", "on", "with", "he", "as", "you", "do", "at", "this", "but",
@@ -456,7 +500,8 @@ def build_index(
             ctx[t].append([doc_idx, ctx_tf.get(t, 1)])
             df[t] = df.get(t, 0) + 1
 
-        is_exclusive = bool(ev.get("negRisk") or ev.get("enableNegRisk"))
+        is_polymarket = ev.get("source", "polymarket") == "polymarket"
+        is_exclusive = not is_polymarket and bool(ev.get("negRisk") or ev.get("enableNegRisk"))
 
         norm_factor = 1
         if is_exclusive and len(active_markets) > 1:
@@ -492,8 +537,10 @@ def build_index(
         outcomes = []
         for m in top_markets:
             raw_prices = parse_outcome_prices(m.get("outcomePrices"))
-            best = _best_price(m)
-            if is_exclusive and norm_factor > 0 and len(active_markets) > 1:
+            best = _best_price(m) if not is_polymarket else None
+            if is_polymarket:
+                display_prices = polymarket_display_prices(m)
+            elif is_exclusive and norm_factor > 0 and len(active_markets) > 1:
                 normed = [round(best / norm_factor, 4)]
                 if len(raw_prices) > 1:
                     normed.append(round(1 - normed[0], 4))
@@ -505,9 +552,9 @@ def build_index(
             else:
                 display_prices = raw_prices
 
-            bid = float(m.get("bestBid") or 0)
-            ask = float(m.get("bestAsk") or 1)
-            spread = ask - bid if m.get("bestBid") is not None else 0
+            bid = _valid_price(m.get("bestBid"))
+            ask = _valid_price(m.get("bestAsk"))
+            last = _valid_price(m.get("lastTradePrice"))
 
             o = {
                 "q": m.get("question", ""),
@@ -515,10 +562,10 @@ def build_index(
                 "op": display_prices,
                 "v": round(float(m.get("volume24hr") or 0)),
             }
-            if m.get("bestBid") is not None: o["bid"] = round(float(m["bestBid"]), 4)
-            if m.get("bestAsk") is not None: o["ask"] = round(float(m["bestAsk"]), 4)
-            if m.get("lastTradePrice") is not None: o["last"] = round(float(m["lastTradePrice"]), 4)
-            if spread >= 0.10: o["thin"] = 1
+            if bid is not None: o["bid"] = round(bid, 4)
+            if ask is not None: o["ask"] = round(ask, 4)
+            if last is not None: o["last"] = round(last, 4)
+            if bid is not None and ask is not None and ask - bid >= 0.10: o["thin"] = 1
             mimg = m.get("image") or m.get("icon") or ""
             if mimg and mimg != ev.get("image", ""):
                 o["im"] = mimg

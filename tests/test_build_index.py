@@ -503,18 +503,26 @@ class TestBuildIndexEmpty(unittest.TestCase):
         self.assertEqual(data["n"], 0)
 
 
-class TestNormalization(unittest.TestCase):
-    def test_exclusive_event_prices_normalized(self):
-        """Mutually exclusive event: prices should be normalized to sum ~100%."""
+class TestPolymarketPrices(unittest.TestCase):
+    def test_shared_price_cases(self):
+        cases = json.loads((Path(__file__).parent / "fixtures/polymarket-prices.json").read_text())
+        for case in cases:
+            with self.subTest(case["name"]):
+                self.assertEqual(build_index_mod.polymarket_display_prices(case["market"]), case["expected"])
+                event = {"markets": [{**case["market"], "volume": 5}]}
+                data = build_index([event], include_closed_markets=True)
+                self.assertEqual(data["docs"][0]["mk"][0]["op"], case["expected"])
+
+    def test_exclusive_event_prices_not_normalized(self):
+        """Mutually exclusive outcomes retain their individual prices."""
         data = build_index([EXCLUSIVE_EVENT])
         doc = data["docs"][0]
         prices = [m["op"][0] for m in doc["mk"]]
         total = sum(prices)
-        self.assertAlmostEqual(total, 1.0, places=1,
-            msg=f"Normalized prices should sum to ~1.0, got {total}")
+        self.assertAlmostEqual(total, 0.9, places=4)
 
     def test_exclusive_event_relative_order(self):
-        """Normalization should preserve relative ordering."""
+        """Outcomes remain in descending probability order."""
         data = build_index([EXCLUSIVE_EVENT])
         doc = data["docs"][0]
         prices = [m["op"][0] for m in doc["mk"]]
@@ -522,12 +530,11 @@ class TestNormalization(unittest.TestCase):
             msg="Prices should still be in descending order")
 
     def test_exclusive_event_alice_is_highest(self):
-        """Alice (0.40 raw) should be highest after normalization."""
+        """Alice stays at 40% even though the group sums to 90%."""
         data = build_index([EXCLUSIVE_EVENT])
         doc = data["docs"][0]
         self.assertEqual(doc["mk"][0]["l"], "Alice")
-        self.assertGreater(doc["mk"][0]["op"][0], 0.4,
-            msg="Alice should be >40% after normalization (raw sum was 0.9)")
+        self.assertEqual(doc["mk"][0]["op"], [0.4, 0.6])
 
     def test_independent_event_not_normalized(self):
         """Non-mutually-exclusive event: prices should NOT be normalized."""
@@ -539,15 +546,11 @@ class TestNormalization(unittest.TestCase):
         self.assertAlmostEqual(prices[1], 0.60, places=2,
             msg="X should stay at ~60% (not normalized)")
 
-    def test_exclusive_with_dead_markets_excluded(self):
-        """Dead markets (low vol, ~50%) should not inflate normalization."""
+    def test_dead_markets_do_not_change_other_prices(self):
         data = build_index([EXCLUSIVE_WITH_DEAD])
         doc = data["docs"][0]
         fav = next(m for m in doc["mk"] if m["l"] == "Fav")
-        # Raw: 0.60, sum of meaningful: 0.60+0.30=0.90, normalized: 0.60/0.90=0.667
-        # If dead market included: sum=1.40, normalized: 0.60/1.40=0.43 (wrong)
-        self.assertGreater(fav["op"][0], 0.6,
-            msg="Fav should be >60% (dead market excluded from norm)")
+        self.assertEqual(fav["op"], [0.6, 0.4])
 
     def test_bid_ask_last_stored(self):
         """Bid, ask, and last trade price should be stored when available."""
@@ -580,9 +583,9 @@ class TestNormalization(unittest.TestCase):
             "Australia",
             "Draw (United States vs. Australia)",
         ])
-        self.assertAlmostEqual(by_label["United States"]["op"][0], 0.5594, places=4)
-        self.assertAlmostEqual(by_label["Australia"]["op"][0], 0.1980, places=4)
-        self.assertNotAlmostEqual(by_label["Australia"]["op"][0], 0.4406, places=3)
+        self.assertAlmostEqual(by_label["United States"]["op"][0], 0.565, places=4)
+        self.assertAlmostEqual(by_label["Australia"]["op"][0], 0.20, places=4)
+        self.assertNotAlmostEqual(by_label["Australia"]["op"][0], 0.435, places=3)
 
     def test_sports_future_uses_probability_order(self):
         """Sports futures/props should not treat option indexes as ordered thresholds."""
